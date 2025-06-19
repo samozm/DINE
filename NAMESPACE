@@ -1,0 +1,3 @@
+useDynLib(PLoCONE)
+importFrom(Rcpp, evalCpp)
+export("estimate")
