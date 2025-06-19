@@ -1,1 +1,1 @@
-# PLoCONE
+# Dynamic Network Interaction Estimation (DINE) 
