@@ -11,15 +11,159 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
-// estimate_DEbeta
-Rcpp::List estimate_DEbeta(const Eigen::MatrixXd& X, const Eigen::VectorXd& y, const Eigen::MatrixXd& Z, int n, int k, int t, int max_itr, std::string covtype, int idx, bool REML, double eigen_threshold);
-RcppExport SEXP _PLoCONE_estimate_DEbeta(SEXP XSEXP, SEXP ySEXP, SEXP ZSEXP, SEXP nSEXP, SEXP kSEXP, SEXP tSEXP, SEXP max_itrSEXP, SEXP covtypeSEXP, SEXP idxSEXP, SEXP REMLSEXP, SEXP eigen_thresholdSEXP) {
+// estimate_V
+Rcpp::List estimate_V(const Eigen::MatrixXd& X, const Eigen::VectorXd& y, std::vector<Eigen::MatrixXd>& V, const Eigen::VectorXd& beta, const Eigen::MatrixXi& MAP, int n, int k, int t);
+RcppExport SEXP _PLoCONE_estimate_V(SEXP XSEXP, SEXP ySEXP, SEXP VSEXP, SEXP betaSEXP, SEXP MAPSEXP, SEXP nSEXP, SEXP kSEXP, SEXP tSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type X(XSEXP);
     Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type y(ySEXP);
-    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type Z(ZSEXP);
+    Rcpp::traits::input_parameter< std::vector<Eigen::MatrixXd>& >::type V(VSEXP);
+    Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type beta(betaSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXi& >::type MAP(MAPSEXP);
+    Rcpp::traits::input_parameter< int >::type n(nSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< int >::type t(tSEXP);
+    rcpp_result_gen = Rcpp::wrap(estimate_V(X, y, V, beta, MAP, n, k, t));
+    return rcpp_result_gen;
+END_RCPP
+}
+// estimate_D
+Rcpp::List estimate_D(const Eigen::VectorXd& r0, const std::vector<Eigen::MatrixXd>& Z, Eigen::MatrixXd& D, const Eigen::MatrixXd& E, const std::vector<Eigen::MatrixXd>& V, const Eigen::MatrixXi& MAP, int n, int k, int t);
+RcppExport SEXP _PLoCONE_estimate_D(SEXP r0SEXP, SEXP ZSEXP, SEXP DSEXP, SEXP ESEXP, SEXP VSEXP, SEXP MAPSEXP, SEXP nSEXP, SEXP kSEXP, SEXP tSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type r0(r0SEXP);
+    Rcpp::traits::input_parameter< const std::vector<Eigen::MatrixXd>& >::type Z(ZSEXP);
+    Rcpp::traits::input_parameter< Eigen::MatrixXd& >::type D(DSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type E(ESEXP);
+    Rcpp::traits::input_parameter< const std::vector<Eigen::MatrixXd>& >::type V(VSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXi& >::type MAP(MAPSEXP);
+    Rcpp::traits::input_parameter< int >::type n(nSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< int >::type t(tSEXP);
+    rcpp_result_gen = Rcpp::wrap(estimate_D(r0, Z, D, E, V, MAP, n, k, t));
+    return rcpp_result_gen;
+END_RCPP
+}
+// estimate_E
+Rcpp::List estimate_E(const Eigen::VectorXd& r0, const Rcpp::List& Z, const Eigen::MatrixXd& D, Eigen::MatrixXd& E, const std::vector<Eigen::MatrixXd>& V, const Eigen::MatrixXi& MAP, int n, int k, int t);
+RcppExport SEXP _PLoCONE_estimate_E(SEXP r0SEXP, SEXP ZSEXP, SEXP DSEXP, SEXP ESEXP, SEXP VSEXP, SEXP MAPSEXP, SEXP nSEXP, SEXP kSEXP, SEXP tSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type r0(r0SEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List& >::type Z(ZSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type D(DSEXP);
+    Rcpp::traits::input_parameter< Eigen::MatrixXd& >::type E(ESEXP);
+    Rcpp::traits::input_parameter< const std::vector<Eigen::MatrixXd>& >::type V(VSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXi& >::type MAP(MAPSEXP);
+    Rcpp::traits::input_parameter< int >::type n(nSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< int >::type t(tSEXP);
+    rcpp_result_gen = Rcpp::wrap(estimate_E(r0, Z, D, E, V, MAP, n, k, t));
+    return rcpp_result_gen;
+END_RCPP
+}
+// thresholdRange
+void thresholdRange(const Eigen::MatrixXd& R, Eigen::ArrayXXd& theta, Eigen::MatrixXd& cov, const Eigen::MatrixXi& MAP, double& lower, double& upper);
+RcppExport SEXP _PLoCONE_thresholdRange(SEXP RSEXP, SEXP thetaSEXP, SEXP covSEXP, SEXP MAPSEXP, SEXP lowerSEXP, SEXP upperSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type R(RSEXP);
+    Rcpp::traits::input_parameter< Eigen::ArrayXXd& >::type theta(thetaSEXP);
+    Rcpp::traits::input_parameter< Eigen::MatrixXd& >::type cov(covSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXi& >::type MAP(MAPSEXP);
+    Rcpp::traits::input_parameter< double& >::type lower(lowerSEXP);
+    Rcpp::traits::input_parameter< double& >::type upper(upperSEXP);
+    thresholdRange(R, theta, cov, MAP, lower, upper);
+    return R_NilValue;
+END_RCPP
+}
+// threshold
+void threshold(const Eigen::MatrixXd& abscov, const Eigen::MatrixXd& signcov, const Eigen::MatrixXd& thetalambda, Eigen::MatrixXd& sigma_out);
+RcppExport SEXP _PLoCONE_threshold(SEXP abscovSEXP, SEXP signcovSEXP, SEXP thetalambdaSEXP, SEXP sigma_outSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type abscov(abscovSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type signcov(signcovSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type thetalambda(thetalambdaSEXP);
+    Rcpp::traits::input_parameter< Eigen::MatrixXd& >::type sigma_out(sigma_outSEXP);
+    threshold(abscov, signcov, thetalambda, sigma_out);
+    return R_NilValue;
+END_RCPP
+}
+// threshold_V
+Rcpp::List threshold_V(const Eigen::MatrixXd& R, Eigen::MatrixXd& sigma, Eigen::ArrayXXd& theta, const Eigen::MatrixXi& MAP, int n_fold);
+RcppExport SEXP _PLoCONE_threshold_V(SEXP RSEXP, SEXP sigmaSEXP, SEXP thetaSEXP, SEXP MAPSEXP, SEXP n_foldSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type R(RSEXP);
+    Rcpp::traits::input_parameter< Eigen::MatrixXd& >::type sigma(sigmaSEXP);
+    Rcpp::traits::input_parameter< Eigen::ArrayXXd& >::type theta(thetaSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXi& >::type MAP(MAPSEXP);
+    Rcpp::traits::input_parameter< int >::type n_fold(n_foldSEXP);
+    rcpp_result_gen = Rcpp::wrap(threshold_V(R, sigma, theta, MAP, n_fold));
+    return rcpp_result_gen;
+END_RCPP
+}
+// calc_ZDZ_wrapper
+Rcpp::List calc_ZDZ_wrapper(const std::vector<Eigen::MatrixXd>& Z, const Eigen::MatrixXd& D, const Eigen::VectorXd& E, const Eigen::MatrixXi& MAP, int n, int k, int t);
+RcppExport SEXP _PLoCONE_calc_ZDZ_wrapper(SEXP ZSEXP, SEXP DSEXP, SEXP ESEXP, SEXP MAPSEXP, SEXP nSEXP, SEXP kSEXP, SEXP tSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const std::vector<Eigen::MatrixXd>& >::type Z(ZSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type D(DSEXP);
+    Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type E(ESEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXi& >::type MAP(MAPSEXP);
+    Rcpp::traits::input_parameter< int >::type n(nSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< int >::type t(tSEXP);
+    rcpp_result_gen = Rcpp::wrap(calc_ZDZ_wrapper(Z, D, E, MAP, n, k, t));
+    return rcpp_result_gen;
+END_RCPP
+}
+// threshold_D
+Rcpp::List threshold_D(Eigen::MatrixXd& D, double nonzero_pct);
+RcppExport SEXP _PLoCONE_threshold_D(SEXP DSEXP, SEXP nonzero_pctSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Eigen::MatrixXd& >::type D(DSEXP);
+    Rcpp::traits::input_parameter< double >::type nonzero_pct(nonzero_pctSEXP);
+    rcpp_result_gen = Rcpp::wrap(threshold_D(D, nonzero_pct));
+    return rcpp_result_gen;
+END_RCPP
+}
+// initial_estimates
+Rcpp::List initial_estimates(const Eigen::MatrixXd& X, const Eigen::VectorXd& y, const Eigen::MatrixXi& MAP, int n, int k, int t);
+RcppExport SEXP _PLoCONE_initial_estimates(SEXP XSEXP, SEXP ySEXP, SEXP MAPSEXP, SEXP nSEXP, SEXP kSEXP, SEXP tSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type y(ySEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXi& >::type MAP(MAPSEXP);
+    Rcpp::traits::input_parameter< int >::type n(nSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< int >::type t(tSEXP);
+    rcpp_result_gen = Rcpp::wrap(initial_estimates(X, y, MAP, n, k, t));
+    return rcpp_result_gen;
+END_RCPP
+}
+// estimate_all
+Rcpp::List estimate_all(const Eigen::MatrixXd& X, const Eigen::VectorXd& y, const Rcpp::List& Z_in, int n, int k, int t, int max_itr, std::string covtype, int idx, bool REML, double eigen_threshold);
+RcppExport SEXP _PLoCONE_estimate_all(SEXP XSEXP, SEXP ySEXP, SEXP Z_inSEXP, SEXP nSEXP, SEXP kSEXP, SEXP tSEXP, SEXP max_itrSEXP, SEXP covtypeSEXP, SEXP idxSEXP, SEXP REMLSEXP, SEXP eigen_thresholdSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type y(ySEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List& >::type Z_in(Z_inSEXP);
     Rcpp::traits::input_parameter< int >::type n(nSEXP);
     Rcpp::traits::input_parameter< int >::type k(kSEXP);
     Rcpp::traits::input_parameter< int >::type t(tSEXP);
@@ -28,60 +172,57 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type idx(idxSEXP);
     Rcpp::traits::input_parameter< bool >::type REML(REMLSEXP);
     Rcpp::traits::input_parameter< double >::type eigen_threshold(eigen_thresholdSEXP);
-    rcpp_result_gen = Rcpp::wrap(estimate_DEbeta(X, y, Z, n, k, t, max_itr, covtype, idx, REML, eigen_threshold));
+    rcpp_result_gen = Rcpp::wrap(estimate_all(X, y, Z_in, n, k, t, max_itr, covtype, idx, REML, eigen_threshold));
     return rcpp_result_gen;
 END_RCPP
 }
-// rcppeigen_hello_world
-Eigen::MatrixXd rcppeigen_hello_world();
-RcppExport SEXP _PLoCONE_rcppeigen_hello_world() {
+// estimate_DEbeta
+Rcpp::List estimate_DEbeta(const Eigen::MatrixXd& X, const Eigen::VectorXd& y, const Rcpp::List& Z_in, int n, int k, int t, int max_itr, std::string covtype, bool REML, double eigen_threshold);
+RcppExport SEXP _PLoCONE_estimate_DEbeta(SEXP XSEXP, SEXP ySEXP, SEXP Z_inSEXP, SEXP nSEXP, SEXP kSEXP, SEXP tSEXP, SEXP max_itrSEXP, SEXP covtypeSEXP, SEXP REMLSEXP, SEXP eigen_thresholdSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    rcpp_result_gen = Rcpp::wrap(rcppeigen_hello_world());
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type y(ySEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List& >::type Z_in(Z_inSEXP);
+    Rcpp::traits::input_parameter< int >::type n(nSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< int >::type t(tSEXP);
+    Rcpp::traits::input_parameter< int >::type max_itr(max_itrSEXP);
+    Rcpp::traits::input_parameter< std::string >::type covtype(covtypeSEXP);
+    Rcpp::traits::input_parameter< bool >::type REML(REMLSEXP);
+    Rcpp::traits::input_parameter< double >::type eigen_threshold(eigen_thresholdSEXP);
+    rcpp_result_gen = Rcpp::wrap(estimate_DEbeta(X, y, Z_in, n, k, t, max_itr, covtype, REML, eigen_threshold));
     return rcpp_result_gen;
 END_RCPP
 }
-// rcppeigen_outerproduct
-Eigen::MatrixXd rcppeigen_outerproduct(const Eigen::VectorXd& x);
-RcppExport SEXP _PLoCONE_rcppeigen_outerproduct(SEXP xSEXP) {
+// covCalc
+Eigen::MatrixXd covCalc(const Eigen::MatrixXd& X, const Eigen::MatrixXi& MAP, bool print);
+RcppExport SEXP _PLoCONE_covCalc(SEXP XSEXP, SEXP MAPSEXP, SEXP printSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type x(xSEXP);
-    rcpp_result_gen = Rcpp::wrap(rcppeigen_outerproduct(x));
-    return rcpp_result_gen;
-END_RCPP
-}
-// rcppeigen_innerproduct
-double rcppeigen_innerproduct(const Eigen::VectorXd& x);
-RcppExport SEXP _PLoCONE_rcppeigen_innerproduct(SEXP xSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type x(xSEXP);
-    rcpp_result_gen = Rcpp::wrap(rcppeigen_innerproduct(x));
-    return rcpp_result_gen;
-END_RCPP
-}
-// rcppeigen_bothproducts
-Rcpp::List rcppeigen_bothproducts(const Eigen::VectorXd& x);
-RcppExport SEXP _PLoCONE_rcppeigen_bothproducts(SEXP xSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type x(xSEXP);
-    rcpp_result_gen = Rcpp::wrap(rcppeigen_bothproducts(x));
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXi& >::type MAP(MAPSEXP);
+    Rcpp::traits::input_parameter< bool >::type print(printSEXP);
+    rcpp_result_gen = Rcpp::wrap(covCalc(X, MAP, print));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_PLoCONE_estimate_DEbeta", (DL_FUNC) &_PLoCONE_estimate_DEbeta, 11},
-    {"_PLoCONE_rcppeigen_hello_world", (DL_FUNC) &_PLoCONE_rcppeigen_hello_world, 0},
-    {"_PLoCONE_rcppeigen_outerproduct", (DL_FUNC) &_PLoCONE_rcppeigen_outerproduct, 1},
-    {"_PLoCONE_rcppeigen_innerproduct", (DL_FUNC) &_PLoCONE_rcppeigen_innerproduct, 1},
-    {"_PLoCONE_rcppeigen_bothproducts", (DL_FUNC) &_PLoCONE_rcppeigen_bothproducts, 1},
+    {"_PLoCONE_estimate_V", (DL_FUNC) &_PLoCONE_estimate_V, 8},
+    {"_PLoCONE_estimate_D", (DL_FUNC) &_PLoCONE_estimate_D, 9},
+    {"_PLoCONE_estimate_E", (DL_FUNC) &_PLoCONE_estimate_E, 9},
+    {"_PLoCONE_thresholdRange", (DL_FUNC) &_PLoCONE_thresholdRange, 6},
+    {"_PLoCONE_threshold", (DL_FUNC) &_PLoCONE_threshold, 4},
+    {"_PLoCONE_threshold_V", (DL_FUNC) &_PLoCONE_threshold_V, 5},
+    {"_PLoCONE_calc_ZDZ_wrapper", (DL_FUNC) &_PLoCONE_calc_ZDZ_wrapper, 7},
+    {"_PLoCONE_threshold_D", (DL_FUNC) &_PLoCONE_threshold_D, 2},
+    {"_PLoCONE_initial_estimates", (DL_FUNC) &_PLoCONE_initial_estimates, 6},
+    {"_PLoCONE_estimate_all", (DL_FUNC) &_PLoCONE_estimate_all, 11},
+    {"_PLoCONE_estimate_DEbeta", (DL_FUNC) &_PLoCONE_estimate_DEbeta, 10},
+    {"_PLoCONE_covCalc", (DL_FUNC) &_PLoCONE_covCalc, 3},
     {NULL, NULL, 0}
 };
 
