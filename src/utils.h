@@ -11,11 +11,15 @@
 
 std::string printdims(const Eigen::MatrixXd & obj);
 
+std::string printvec(const std::vector<double> & obj);
+
 std::string BoolToString(bool b);
 
 int BoolToInt(bool b);
 
 int a_in_b(double a, const Eigen::VectorXd & b);
+
+Eigen::ArrayXi loc_a_in_b(double a, const Eigen::VectorXd & b);
 
 void build_V_list_from_master(std::vector<Eigen::MatrixXd> & V, const Eigen::MatrixXd & master, const Eigen::MatrixXi & MAP, int n, int k, int t);
 
@@ -38,10 +42,26 @@ void calc_ZDZ_plus_E_list(const std::vector<Eigen::MatrixXd>& Z,
                           const Eigen::MatrixXi & MAP,
                           int n, int k, int t);
 
-void estimate_beta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y, const Eigen::VectorXi kt_vec,
+Rcpp::List calc_ZDZ_plus_E_list(const std::vector<Eigen::MatrixXd>& Z,
+                          const Eigen::MatrixXd & D, const Eigen::VectorXd & E,
+                          int n, int k, int t);
+
+int make_MAP(const std::vector<Eigen::MatrixXd>& Z,
+             Eigen::MatrixXd & masterZ, 
+             Eigen::MatrixXi & MAP, Eigen::VectorXd & r0,
+             int n, int k, int t);
+
+void estimate_beta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y, 
+                   const Eigen::VectorXi kt_vec, const Eigen::MatrixXi & MAP,
                    const std::vector<Eigen::MatrixXd> & V, Eigen::VectorXd & beta,
-                   int n, int k, int t);
+                   int n, int k, int t, int idx=0);
 
 Eigen::MatrixXd Et_assemble(const Eigen::VectorXd & E, 
                             const Eigen::MatrixXi & MAP, 
                             int i, int k, int t, int kt);
+
+Eigen::VectorXd R_expand(const Eigen::VectorXd & R,
+                         const Eigen::MatrixXi & MAP,
+                         int idx, int q);
+
+Eigen::MatrixXd RtR(const Eigen::MatrixXd & R, const Eigen::MatrixXi & MAP);

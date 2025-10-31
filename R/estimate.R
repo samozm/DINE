@@ -1,5 +1,5 @@
 #' @export
-estimate <- function(X,y,Z,n0,k0,t0,MAP,algo=2,max_itr=200,covtype="")
+estimate <- function(X,y,Z,n0,k0,t0,algo=2,max_itr=200,covtype="")
 {
   startTime <- proc.time()
   nkt = 0
@@ -10,18 +10,21 @@ estimate <- function(X,y,Z,n0,k0,t0,MAP,algo=2,max_itr=200,covtype="")
   
   if(algo==2)
   {  
-    res <- estimate_DEbeta(X,y,Z,MAP,n0,k0,t0,nkt,max_itr,covtype) #a2.estimate_DEbeta(X,y,Z,n0,k0,t0,max_itr,covtype,idx)
+    res <- estimate_DEbeta(X,y,Z,n0,k0,t0,max_itr,covtype) 
+    #a2.estimate_DEbeta(X,y,Z,n0,k0,t0,max_itr,covtype,idx)
+    sigma <- res$sigma
   }
   else if(algo==1)
   {
-    res <- estimate_all(X,y,Z,n,k,t,max_itr,covtype)
+    res <- estimate_all(X,y,Z,n0,k0,t0,max_itr,covtype)
+    sigma <- 0
   }
   converged <- res$converged
   n_iter <- res$n_iter
   Sigma <- res$Sigma
   D <- res$D 
   E <- res$E 
-  sigma <- res$sigma
+  
   beta <- res$beta
   
   n_iter <- res$n_iter
@@ -30,5 +33,7 @@ estimate <- function(X,y,Z,n0,k0,t0,MAP,algo=2,max_itr=200,covtype="")
   exeTime <- as.numeric(exeTimeClass[3])
   timelength <- exeTime
   #V <- Matrix::bdiag(Sigma)
-  return(list(E=E,D=D,V=Sigma,beta=beta,time=timelength,converged=converged,sigma=sigma,n_iter=n_iter))#,Sigma=V))
+  return(list(E=E,D=D,V=Sigma,beta=beta,time=timelength,
+              converged=converged,sigma=sigma,n_iter=n_iter,
+              all_err=res$all_err,MAP=res$MAP))#,Sigma=V))
 }

@@ -45,20 +45,22 @@ void calc_b(const Eigen::MatrixXd & X, const Eigen::VectorXd & r0,
             const std::vector<Eigen::MatrixXd> & Z,
             const Eigen::MatrixXd & Lambda_D, const Eigen::VectorXd & E, Eigen::VectorXd & b,
             const Eigen::MatrixXi & MAP,
-            int n, int k, int t)
+            int n, int k, int t, int nkt)
 {
     int q = 2*k;
     Eigen::MatrixXd ZEEZ = Eigen::MatrixXd::Zero(q,q);
-    Eigen::MatrixXd DZETE = Eigen::MatrixXd::Zero(q,n*k*t);
-    Eigen::MatrixXd EInv = Eigen::ArrayXd::Constant(k,1.0) / E.array(); //E.inverse();
+    Eigen::MatrixXd DZETE = Eigen::MatrixXd::Zero(q,nkt);
+    Eigen::VectorXd EInv = Eigen::ArrayXd::Constant(k,1.0) / E.array(); //E.inverse();
+    int cnt = 0;
     for(int i=0;i<n;++i)
     {
         int kt = Z[i].rows();
-        Eigen::MatrixXd Et = Et_assemble(E, MAP, i, k, t, kt);
+        //Eigen::MatrixXd Et = Et_assemble(E, MAP, i, k, t, kt);
         Eigen::MatrixXd EtInv = Et_assemble(EInv, MAP, i, k, t, kt);
         Eigen::MatrixXd EZ = EtInv * Z[i]; //Z(Eigen::seqN(i*k*t,k*t),Eigen::all); 
         ZEEZ += EZ.transpose() * EZ;
-        DZETE(Eigen::all,Eigen::seqN(i*k*t,k*t)) = Lambda_D.transpose() * Z[i].transpose() * Et.array().pow(2).matrix().inverse();
+        DZETE(Eigen::all,Eigen::seqN(cnt,kt)) = Lambda_D.transpose() * Z[i].transpose() * EtInv.array().pow(2).matrix(); //Et.array().pow(2).matrix().inverse();
+        cnt += kt;
     }
 
     b = Lambda_D.transpose() * (Eigen::MatrixXd::Identity(2*k,2*k) + (Lambda_D.transpose() * ZEEZ * Lambda_D)).colPivHouseholderQr().solve(DZETE) * r0;
@@ -66,12 +68,12 @@ void calc_b(const Eigen::MatrixXd & X, const Eigen::VectorXd & r0,
 
 void estimate_E(const Eigen::MatrixXd & X, const Eigen::VectorXd & r0, 
                 const std::vector<Eigen::MatrixXd>& Z,
-                const Eigen::MatrixXd & Lambda_D, const Eigen::VectorXd & E,
-                const Eigen::MatrixXi & MAP, Eigen::VectorXd & Lambda_E, 
+                const Eigen::MatrixXd & Lambda_D, Eigen::VectorXd & Lambda_E,
+                const Eigen::MatrixXi & MAP, 
                 int n, int k, int t, int nkt)
 {
     Eigen::VectorXd b;
-    calc_b(X,r0,Z,Lambda_D,E,b,MAP,n,k,t);
+    calc_b(X,r0,Z,Lambda_D,Lambda_E,b,MAP,n,k,t,nkt);
     Eigen::VectorXd r = r0 - Zbcalc(Z, b, n, nkt);
     Eigen::MatrixXd R = Eigen::MatrixXd::Zero(n*t,k);
     int current = 0;
@@ -108,7 +110,7 @@ void calc_e(const Eigen::VectorXd & r0, const std::vector<Eigen::MatrixXd>& Z,
     Eigen::MatrixXd BDB = BD.transpose() * BD;
     Eigen::MatrixXd ZEEZ = Eigen::MatrixXd::Zero(p,p);
     Eigen::MatrixXd EZ = Eigen::MatrixXd::Zero(nkt,p);
-    Eigen::MatrixXd EZ_tmp(k*t,p);
+    Eigen::MatrixXd EZ_tmp;
 
     int cnt = 0;
     for(int i=0;i<n;++i)
@@ -141,9 +143,9 @@ void a2_thresholdRange(const Eigen::MatrixXd & R, Eigen::ArrayXXd& theta, Eigen:
     int p = R.cols();
     cov = covCalc(R,MAP);
 
-    theta = (R.array().pow(2).matrix().transpose() * R.array().pow(2).matrix() / double(n) - cov.array().pow(2).matrix()).array().sqrt();
+    theta = (RtR(R,MAP) - cov.array().pow(2).matrix()).array().sqrt();
     Eigen::MatrixXd delta = (cov.array() / theta).cwiseAbs().matrix();
-    delta.diagonal() = Eigen::VectorXd::Zero(p);
+    delta.diagonal() = Eigen::VectorXd::Zero(delta.rows());
     upper = delta.maxCoeff();
     lower = (delta.array() <= 0.f).select(std::numeric_limits<int>::max(), delta).minCoeff();
 }
@@ -216,12 +218,11 @@ void a2_threshold_D(const Eigen::MatrixXd & R, Eigen::MatrixXd& sigma,
         double upper = 0.0;
         Eigen::MatrixXd absCovTrain(p,p);
         Eigen::ArrayXXd thetaTrain(p,p);
-        a2_thresholdRange(R(not_val_idx,Eigen::all),thetaTrain,absCovTrain,MAP(not_val_idx,Eigen::all),lower,upper);
+        a2_thresholdRange(R(not_val_idx,Eigen::all), thetaTrain, absCovTrain, MAP(not_val_idx,Eigen::all), lower, upper);
         Eigen::ArrayXXd signCovTrain = absCovTrain.cwiseSign();
         absCovTrain = absCovTrain.cwiseAbs();
         for(int j=0;j<nParam;++j)
         {
-
             //Eigen::MatrixXd thetalambda = params[j] * thetaTrain;
             Eigen::MatrixXd sigmaTrain(p,p);
             a2_threshold(absCovTrain,signCovTrain,params[j] * thetaTrain,sigmaTrain);
@@ -236,7 +237,6 @@ void a2_threshold_D(const Eigen::MatrixXd & R, Eigen::MatrixXd& sigma,
     a2_threshold(absCov,signCov,params[minIndex] * theta,sigma);
 
 }
-
 
 void estimate_D(const Eigen::MatrixXd & X, const Eigen::VectorXd & r0, 
                 const std::vector<Eigen::MatrixXd>& Z,
@@ -253,7 +253,7 @@ void estimate_D(const Eigen::MatrixXd & X, const Eigen::VectorXd & r0,
     for(int i=0;i<n;++i)
     {
         int kt = Z[i].rows();
-        R(i,Eigen::all) = (Z[i].transpose() * Z[i]).colPivHouseholderQr().solve(Z[i].transpose()) * r(Eigen::seqN(cnt,kt));
+        R(i,Eigen::all) = (Z[i].transpose() * Z[i]).colPivHouseholderQr().solve(Z[i].transpose()) * r(Eigen::seqN(cnt,kt)); 
         cnt += kt;
     }
 
@@ -267,24 +267,25 @@ double calc_sigma2(const std::vector<Eigen::MatrixXd>& Z,
                    const Eigen::MatrixXd& D, const Eigen::VectorXd& E, 
                    const Eigen::MatrixXi & MAP,
                    const Eigen::VectorXd& r0, 
-                   int n, int k, int t, int p, bool REML=false)
+                   int n, int k, int t, int p, 
+                   bool REML=false)
 {
     double sigma2 = 0.0;
     Eigen::MatrixXd Lambda_V;
-    int cnt = 0;
+    int nkt = 0;
     for(int i=0; i<n;++i)
     {
         int kt = Z[i].rows();
         Eigen::MatrixXd Et = Et_assemble(E, MAP, i, k, t, kt);
         Lambda_V = (Z[i] * D * Z[i].transpose()  + Et).llt().matrixL();
-        sigma2 += (Lambda_V.colPivHouseholderQr().solve(r0(Eigen::seqN(cnt,kt)))).squaredNorm();
-        cnt += kt;
+        sigma2 += (Lambda_V.colPivHouseholderQr().solve(r0(Eigen::seqN(nkt,kt)))).squaredNorm();
+        nkt += kt;
     }
     if(REML)
     {
-        sigma2 = sigma2 / (n*k*t - p);
+        sigma2 = sigma2 / (nkt- p);
     } else {
-        sigma2 = sigma2 / (n*k*t);
+        sigma2 = sigma2 / (nkt);
     }
     return(sigma2);
 }
@@ -319,6 +320,8 @@ void a2_initial_estimates(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
         Lambda_E(i) = (cov_int.diagonal().array())(Eigen::seqN(i*t,t)).sqrt().mean() / 2;
     }
 
+    cov_int.diagonal() = cov_int.diagonal() / 2;
+
     Eigen::MatrixXd B = Eigen::MatrixXd::Zero(q,q); 
     Eigen::MatrixXd ZCZ = Eigen::MatrixXd::Zero(q,q);
     for(int i=0;i<n;++i)
@@ -346,33 +349,13 @@ Rcpp::List estimate_DEbeta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
     Eigen::MatrixXd D(2*k,2*k);
     Eigen::VectorXd Lambda_E(k);
     Eigen::VectorXd beta(p);
+    Eigen::VectorXd r0;
 
-    std::deque<double> all_times; //= Z(Eigen::all,Eigen::seqN(1,2*k,2)).reshaped();
-    int nkt = 0;
-    for(int i=0; i<n; ++i)
-    {
-        nkt += Z[i].rows();
-        Eigen::VectorXd n_times = Z[i](Eigen::all,Eigen::seqN(1,2*k,2)).reshaped();
-        for(int j=0;j<n_times.size();++j)
-        {
-          all_times.push_back(n_times(j)); 
-        }
-    }
-    Eigen::VectorXd r0(nkt);
-    std::set<double> time_set{all_times.begin(), all_times.end()};
-    std::vector<double> times(time_set.begin(), time_set.end());
     Eigen::MatrixXi MAP = Eigen::MatrixXi::Zero(n,k*t);
-    for(int i = 0; i < n; ++i)
-    {
-      for(int j=0; j < t; ++j)
-      {
-        for(int l=0; l<k; ++l)
-        {
-            MAP(i,j*t + l) = a_in_b(times[j],Z[i](Eigen::all,2*l + 1));
-        }
-      }
-    }
+    Eigen::MatrixXd masterZ(k*t,2*k);
+    int nkt = make_MAP(Z,masterZ,MAP,r0,n,k,t);
     
+    Rcpp::Rcout << "initial est" << "\n";
     a2_initial_estimates(X,y,Z,MAP,Sigma_list,Lambda_D,D,Lambda_E,beta,r0,n,k,t);
 
     Eigen::VectorXi kt_vec = MAP.rowwise().sum();
@@ -388,15 +371,22 @@ Rcpp::List estimate_DEbeta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
         Eigen::VectorXd E_prev = Lambda_E;
         Eigen::VectorXd beta_prev = beta;
 
-        estimate_beta(X,y,kt_vec,Sigma_list,beta,n,k,t);
+        Rcpp::Rcout << "est beta" << "\n";
+        estimate_beta(X,y,kt_vec,MAP,Sigma_list,beta,n,k,t, n_itr);
         r0 = y - X * beta; 
+        Rcpp::Rcout << "est D" << "\n";
         estimate_D(X,r0,Z,Lambda_E.array().pow(2),Lambda_D,MAP,D,n,k,t,nkt);
-        estimate_E(X,r0,Z,Lambda_D,Lambda_E.array().pow(2),MAP,Lambda_E,n,k,t,nkt);
+        Rcpp::Rcout << "est E" << "\n";
+        estimate_E(X,r0,Z,Lambda_D,Lambda_E,MAP,n,k,t,nkt);
 
+        Rcpp::Rcout << "calc ZDZ plus E" << "\n";
         calc_ZDZ_plus_E_list(Z,D,Lambda_E.array().pow(2), Sigma_list, MAP, n, k, t);
 
-        err = (Lambda_D - D_prev).squaredNorm() / (k*(2*k+1)) + (Lambda_E - E_prev).squaredNorm() / k + pow((beta - beta_prev).sum(),2) / p;
-        err = err / 3;
+        double err0 = (Lambda_D - D_prev).squaredNorm() / (k*(2*k+1));
+        double err1 = (Lambda_E - E_prev).squaredNorm() / k;
+        double err2 = pow((beta - beta_prev).sum(),2) / p;
+
+        err = (err0 + err1 + err2)/3;
         all_err[n_itr] = err;
         n_itr++;
     }
@@ -409,12 +399,16 @@ Rcpp::List estimate_DEbeta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
 
     Eigen::MatrixXd E = Eigen::MatrixXd::Zero(k,k);
     E.diagonal() = E0 * sigma2;
-    return(Rcpp::List::create(//Rcpp::Named("Sigma")=Sigma,
+    Rcpp::Rcout << "final assemble" << "\n";
+    Eigen::MatrixXd Et = Et_assemble(E.diagonal(),Eigen::MatrixXi::Constant(1,k*t,1),0,k,t,k*t);
+
+    return(Rcpp::List::create( Rcpp::Named("Sigma")=masterZ * D * masterZ.transpose() + Et,//Rcpp::Named("Sigma")=Rcpp::wrap(Sigma_list),
            Rcpp::Named("E") = E,Rcpp::Named("D") = D, 
            Rcpp::Named("Lambda_E") = Lambda_E, 
            Rcpp::Named("beta") = beta, 
            Rcpp::Named("n_iter") = n_itr,
            Rcpp::Named("all_err") = all_err,
            Rcpp::Named("converged") = converged, 
-           Rcpp::Named("sigma") = sigma2));
+           Rcpp::Named("sigma") = sigma2,
+           Rcpp::Named("MAP")= MAP));
 }

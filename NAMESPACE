@@ -1,3 +1,4 @@
 useDynLib(PLoCONE)
 importFrom(Rcpp, evalCpp)
 export("estimate")
+export("calc_ZDZ_plus_E_list")
