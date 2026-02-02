@@ -7,6 +7,7 @@
 #include <typeinfo>
 #include <deque>
 #include <limits>
+#include <cmath>
 // [[Rcpp::depends(RcppEigen)]]
 
 std::string printdims(const Eigen::MatrixXd & obj);

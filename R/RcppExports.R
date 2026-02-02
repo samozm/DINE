@@ -5,8 +5,8 @@ estimate_all <- function(X, y, Z_in, n, k, t, max_itr = 250L, covtype = "", idx 
     .Call('_PLoCONE_estimate_all', PACKAGE = 'PLoCONE', X, y, Z_in, n, k, t, max_itr, covtype, idx, REML, eigen_threshold)
 }
 
-estimate_DEbeta <- function(X, y, Z_in, n, k, t, max_itr = 250L, covtype = "", REML = FALSE, eigen_threshold = 0.001) {
-    .Call('_PLoCONE_estimate_DEbeta', PACKAGE = 'PLoCONE', X, y, Z_in, n, k, t, max_itr, covtype, REML, eigen_threshold)
+estimate_DEbeta <- function(X, y, Z_in, n, k, t, max_itr = 250L, covtype = "", REML = FALSE, verbose = FALSE, seed = 1234L) {
+    .Call('_PLoCONE_estimate_DEbeta', PACKAGE = 'PLoCONE', X, y, Z_in, n, k, t, max_itr, covtype, REML, verbose, seed)
 }
 
 covCalc <- function(X, MAP, print) {

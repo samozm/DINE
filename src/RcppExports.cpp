@@ -33,22 +33,23 @@ BEGIN_RCPP
 END_RCPP
 }
 // estimate_DEbeta
-Rcpp::List estimate_DEbeta(const Eigen::MatrixXd& X, const Eigen::VectorXd& y, const Rcpp::List& Z_in, int n, int k, int t, int max_itr, std::string covtype, bool REML, double eigen_threshold);
-RcppExport SEXP _PLoCONE_estimate_DEbeta(SEXP XSEXP, SEXP ySEXP, SEXP Z_inSEXP, SEXP nSEXP, SEXP kSEXP, SEXP tSEXP, SEXP max_itrSEXP, SEXP covtypeSEXP, SEXP REMLSEXP, SEXP eigen_thresholdSEXP) {
+Rcpp::List estimate_DEbeta(const Eigen::MatrixXd& X, const Eigen::VectorXd& y, Rcpp::List& Z_in, int n, int k, int t, int max_itr, std::string covtype, bool REML, bool verbose, int seed);
+RcppExport SEXP _PLoCONE_estimate_DEbeta(SEXP XSEXP, SEXP ySEXP, SEXP Z_inSEXP, SEXP nSEXP, SEXP kSEXP, SEXP tSEXP, SEXP max_itrSEXP, SEXP covtypeSEXP, SEXP REMLSEXP, SEXP verboseSEXP, SEXP seedSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type X(XSEXP);
     Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type y(ySEXP);
-    Rcpp::traits::input_parameter< const Rcpp::List& >::type Z_in(Z_inSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List& >::type Z_in(Z_inSEXP);
     Rcpp::traits::input_parameter< int >::type n(nSEXP);
     Rcpp::traits::input_parameter< int >::type k(kSEXP);
     Rcpp::traits::input_parameter< int >::type t(tSEXP);
     Rcpp::traits::input_parameter< int >::type max_itr(max_itrSEXP);
     Rcpp::traits::input_parameter< std::string >::type covtype(covtypeSEXP);
     Rcpp::traits::input_parameter< bool >::type REML(REMLSEXP);
-    Rcpp::traits::input_parameter< double >::type eigen_threshold(eigen_thresholdSEXP);
-    rcpp_result_gen = Rcpp::wrap(estimate_DEbeta(X, y, Z_in, n, k, t, max_itr, covtype, REML, eigen_threshold));
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
+    rcpp_result_gen = Rcpp::wrap(estimate_DEbeta(X, y, Z_in, n, k, t, max_itr, covtype, REML, verbose, seed));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -84,7 +85,7 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_PLoCONE_estimate_all", (DL_FUNC) &_PLoCONE_estimate_all, 11},
-    {"_PLoCONE_estimate_DEbeta", (DL_FUNC) &_PLoCONE_estimate_DEbeta, 10},
+    {"_PLoCONE_estimate_DEbeta", (DL_FUNC) &_PLoCONE_estimate_DEbeta, 11},
     {"_PLoCONE_covCalc", (DL_FUNC) &_PLoCONE_covCalc, 3},
     {"_PLoCONE_calc_ZDZ_plus_E_list", (DL_FUNC) &_PLoCONE_calc_ZDZ_plus_E_list, 6},
     {NULL, NULL, 0}

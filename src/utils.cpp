@@ -7,6 +7,7 @@
 #include <typeinfo>
 #include <deque>
 #include <limits>
+#include <cmath>
 #include "utils.h"
 // [[Rcpp::depends(RcppEigen)]]
 
@@ -165,6 +166,10 @@ void vec2list(const std::vector<Eigen::MatrixXd>& vec, Rcpp::List & out)
 
 void list2vec(std::vector<Eigen::MatrixXd>& vec, const Rcpp::List & list)
 {
+    if(list.size() != vec.size())
+    {
+        Rcpp::Rcout << "VEC SIZE (" << vec.size() << ") INCOMPATIBLE W/ LIST SIZE (" << list.size() << ")\n"; 
+    }
     for(int i=0;i<list.size();++i) //(Eigen::MatrixXd i:vec)
     {
         vec[i] = list[i];//out.push_back(i);
@@ -308,6 +313,7 @@ void estimate_beta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
     Eigen::MatrixXd XVX = Eigen::MatrixXd::Zero(q,q);
     int cnt = 0;
     std::vector<bool> v_inv(n);
+    std::vector<Eigen::MatrixXd> V_inv(n);
     for(int i=0;i<n;++i)
     {
         int kt = kt_vec(i);
@@ -319,14 +325,26 @@ void estimate_beta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
         }
         else
         {
-            Rcpp::Rcout << "Singular matrix - using pseudoinv" << "\n";
-            Rcpp::Rcout << "idx = " << idx << " sjt= " << i << "\n";
-            Rcpp::Rcout << "n0 = " << n << "; k0= " << k << "; t0=" << t << "\n";
-            XVX += X(Eigen::seqN(cnt,kt),Eigen::all).transpose() * V[i].completeOrthogonalDecomposition().pseudoInverse() * X(Eigen::seqN(cnt,kt),Eigen::all);
+            //Rcpp::Rcout << "Singular matrix - using pseudoinv" << "\n";
+            //Rcpp::Rcout << "idx = " << idx << " sjt= " << i << "\n";
+            //Rcpp::Rcout << "n0 = " << n << "; k0= " << k << "; t0=" << t << "\n";
+            V_inv[i] = V[i].completeOrthogonalDecomposition().pseudoInverse();
+            XVX += X(Eigen::seqN(cnt,kt),Eigen::all).transpose() * V_inv[i] * X(Eigen::seqN(cnt,kt),Eigen::all);
         }
         cnt += kt;
     }
-    Eigen::MatrixXd XVXinvXt = XVX.colPivHouseholderQr().solve(X.transpose());
+    Eigen::MatrixXd XVXinvXt;
+    Eigen::FullPivLU<Eigen::MatrixXd> lu(XVX);
+    bool v_inv2 = lu.isInvertible();
+    if(v_inv2)
+    {
+        XVXinvXt = XVX.colPivHouseholderQr().solve(X.transpose());
+    }
+    else
+    {
+        //Rcpp::Rcout << "Singular matrix - using pseudoinv" << "\n";
+        XVXinvXt = XVX.completeOrthogonalDecomposition().pseudoInverse() * X.transpose();
+    }
     beta = Eigen::VectorXd::Zero(q);
     cnt = 0;
     for(int i=0;i<n;++i)
@@ -338,7 +356,7 @@ void estimate_beta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
         }
         else
         {
-            beta += XVXinvXt(Eigen::all,Eigen::seqN(cnt,kt)) * V[i].completeOrthogonalDecomposition().pseudoInverse() * y(Eigen::seqN(cnt,kt));
+            beta += XVXinvXt(Eigen::all,Eigen::seqN(cnt,kt)) * V_inv[i] * y(Eigen::seqN(cnt,kt));
         }
         cnt += kt;
     }
@@ -396,10 +414,15 @@ Eigen::MatrixXd RtR(const Eigen::MatrixXd & R, const Eigen::MatrixXi & MAP)//con
             {
                 if(MAP(l,i) != 0 && MAP(l,j) != 0)
                 {
-                    cov(i,j) += (pow(R(l,i) - xmean,2) * pow(R(l,j) - ymean,2)) / double(n_obs);
+                     /*cov(i,j) += (pow(R(l,i) - xmean,2) * pow(R(l,j) - ymean,2)) / double(n_obs);
                     if(i != j)
                     {
                         cov(j,i) += (pow(R(l,i) - xmean,2) * pow(R(l,j) - ymean,2)) / double(n_obs);
+                    }*/
+                    cov(i,j) += (pow(R(l,i),2) * pow(R(l,j),2)) / double(n_obs);
+                    if(i != j)
+                    {
+                        cov(j,i) += (pow(R(l,i),2) * pow(R(l,j),2)) / double(n_obs);
                     }
                 } 
             }

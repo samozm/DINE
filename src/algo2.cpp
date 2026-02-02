@@ -317,10 +317,10 @@ void a2_initial_estimates(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
     Eigen::MatrixXd cov_int = covCalc(R, MAP);
     for(int i=0;i<k;++i)
     {
-        Lambda_E(i) = (cov_int.diagonal().array())(Eigen::seqN(i*t,t)).sqrt().mean() / 2;
+        Lambda_E(i) = (cov_int.diagonal().array())(Eigen::seqN(i*t,t)).sqrt().mean();
     }
 
-    cov_int.diagonal() = cov_int.diagonal() / 2;
+    cov_int.diagonal() = cov_int.diagonal();
 
     Eigen::MatrixXd B = Eigen::MatrixXd::Zero(q,q); 
     Eigen::MatrixXd ZCZ = Eigen::MatrixXd::Zero(q,q);
@@ -334,17 +334,21 @@ void a2_initial_estimates(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
     calc_ZDZ_plus_E_list(Z,D,Lambda_E.array().pow(2),Sigma_list,MAP,n,k,t);
 }
 
+
 // [[Rcpp::export]]
 Rcpp::List estimate_DEbeta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y, 
-                           const Rcpp::List & Z_in, 
+                           Rcpp::List & Z_in, //Z_in will be destroyed for space sacing reasons
                            int n, int k, int t,
                            int max_itr=250, std::string covtype="", 
-                           bool REML=false, double eigen_threshold=0.001)
+                           bool REML=false,
+                           bool verbose=false,
+                           int seed=1234)
 {
     int p = X.cols();
     std::vector<Eigen::MatrixXd> Sigma_list(n);
     std::vector<Eigen::MatrixXd> Z(n);
     list2vec(Z,Z_in);
+    Z_in = Rcpp::List();
     Eigen::MatrixXd Lambda_D(2*k,2*k);
     Eigen::MatrixXd D(2*k,2*k);
     Eigen::VectorXd Lambda_E(k);
@@ -355,32 +359,39 @@ Rcpp::List estimate_DEbeta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
     Eigen::MatrixXd masterZ(k*t,2*k);
     int nkt = make_MAP(Z,masterZ,MAP,r0,n,k,t);
     
-    Rcpp::Rcout << "initial est" << "\n";
     a2_initial_estimates(X,y,Z,MAP,Sigma_list,Lambda_D,D,Lambda_E,beta,r0,n,k,t);
 
     Eigen::VectorXi kt_vec = MAP.rowwise().sum();
+    Eigen::VectorXd beta_offset = Eigen::VectorXd::Zero(p);
     
+    double sigma2 = 0.0;
     double err = 10.0;
-    double prev_err = 10.0;
+    double prev_err = 9.0;
+    double double_prev_err = 8.0;
     int n_itr = 0;
     std::vector<double> all_err(max_itr);
-    while (((err > (5*pow(10,-4))) || (prev_err > (5*pow(10,-4)))) && (n_itr < max_itr))
+    while (((err > (5*pow(10,-5))) || (prev_err > (5*pow(10,-5)))) && (n_itr < max_itr))
     {
+        double_prev_err = prev_err;
         prev_err = err;
         Eigen::MatrixXd D_prev = Lambda_D;
         Eigen::VectorXd E_prev = Lambda_E;
         Eigen::VectorXd beta_prev = beta;
 
-        Rcpp::Rcout << "est beta" << "\n";
+
         estimate_beta(X,y,kt_vec,MAP,Sigma_list,beta,n,k,t, n_itr);
+        beta += beta_offset;
         r0 = y - X * beta; 
-        Rcpp::Rcout << "est D" << "\n";
         estimate_D(X,r0,Z,Lambda_E.array().pow(2),Lambda_D,MAP,D,n,k,t,nkt);
-        Rcpp::Rcout << "est E" << "\n";
         estimate_E(X,r0,Z,Lambda_D,Lambda_E,MAP,n,k,t,nkt);
 
-        Rcpp::Rcout << "calc ZDZ plus E" << "\n";
-        calc_ZDZ_plus_E_list(Z,D,Lambda_E.array().pow(2), Sigma_list, MAP, n, k, t);
+        // TODO: delete? 
+        sigma2 = calc_sigma2(Z,D,Lambda_E.array().pow(2),MAP,r0,n,k,t,p,REML);
+        //Lambda_D = Lambda_D * std::sqrt(sigma2);
+        //Lambda_E = Lambda_E * std::sqrt(sigma2);
+        //D = D * sigma2;
+
+        calc_ZDZ_plus_E_list(Z,D * sigma2,Lambda_E.array().pow(2) * sigma2, Sigma_list, MAP, n, k, t);
 
         double err0 = (Lambda_D - D_prev).squaredNorm() / (k*(2*k+1));
         double err1 = (Lambda_E - E_prev).squaredNorm() / k;
@@ -389,17 +400,57 @@ Rcpp::List estimate_DEbeta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
         err = (err0 + err1 + err2)/3;
         all_err[n_itr] = err;
         n_itr++;
+
+        //TODO: keep checking if this works
+        beta_offset = Eigen::VectorXd::Zero(p);
+
+        // If the last three error values are all the same we are stuck in a loop
+        // add a random offset to beta
+        if((double_prev_err - prev_err) < pow(10,-5) && 
+           (prev_err - err) < pow(10,-5) && 
+           (n_itr < max_itr))
+        {
+            std::random_device rd{};
+            std::mt19937 gen{rd()};
+            double mean = 0;
+            double var = (beta.array() - beta.mean()).square().sum() / 1000.0;
+            std::normal_distribution<double> distribution(mean, var);
+
+            // Draw a sample from the normal distribution
+            Rcpp::Rcout << "offsetting betas \n";
+            for(int i; i < p; ++i)
+            {
+                beta_offset(i) = distribution(gen);
+            }
+        }
+
+        if(verbose)
+        {
+            Rcpp::Rcout << "overall error after " << n_itr << " iterations: " << err << "\n";
+            Rcpp::Rcout << "D " << err0 << " \n";
+            Rcpp::Rcout << Lambda_D(Eigen::seqN(0,5),Eigen::seqN(0,5)) << "\n\n";
+            Rcpp::Rcout << D_prev(Eigen::seqN(0,5),Eigen::seqN(0,5)) << "\n"; 
+
+            Rcpp::Rcout << "E " << err1 << " \n";
+            Rcpp::Rcout << Lambda_E(Eigen::seqN(0,5)) << "\n\n";
+            Rcpp::Rcout << E_prev(Eigen::seqN(0,5)) << "\n"; 
+
+            Rcpp::Rcout << "beta " << err2 << " \n";
+            Rcpp::Rcout << beta(Eigen::seqN(0,5)) << "\n\n";
+            Rcpp::Rcout << beta_prev(Eigen::seqN(0,5)) << "\n"; 
+
+            Rcpp::Rcout << "sigma " << "\n" << sigma2 << "\n";
+        }
     }
     Eigen::VectorXd E0 = Lambda_E.array().pow(2);
-    double sigma2 = calc_sigma2(Z,D,E0,MAP,r0,n,k,t,p,REML);
+    sigma2 = calc_sigma2(Z,D,E0,MAP,r0,n,k,t,p,REML);
     D = D * sigma2;
+    Eigen::MatrixXd E = Eigen::MatrixXd::Zero(k,k);
+    E.diagonal() = E0 * sigma2;
 
     bool converged = false;
     if(n_itr < max_itr) converged = true;
 
-    Eigen::MatrixXd E = Eigen::MatrixXd::Zero(k,k);
-    E.diagonal() = E0 * sigma2;
-    Rcpp::Rcout << "final assemble" << "\n";
     Eigen::MatrixXd Et = Et_assemble(E.diagonal(),Eigen::MatrixXi::Constant(1,k*t,1),0,k,t,k*t);
 
     return(Rcpp::List::create( Rcpp::Named("Sigma")=masterZ * D * masterZ.transpose() + Et,//Rcpp::Named("Sigma")=Rcpp::wrap(Sigma_list),
