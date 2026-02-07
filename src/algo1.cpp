@@ -109,12 +109,16 @@ Rcpp::List estimate_E(const Eigen::VectorXd & r0,
                     ct(l)++;
                 }
             }
-            E_tmp(i,j) /= bot;
             if(E_tmp(i,j) <= 0)
             {
-                E_tmp(i,j) = double(1)/(n*k);
+                E_tmp(i,j) = (1.0)/(n*k);
+            }
+            else
+            {
+                E_tmp(i,j) /= bot;
             }
         }
+
         E(i,i) = E_tmp(i,Eigen::all).mean();
     }
     Rcpp::List ZDZ_list(n);
@@ -337,16 +341,17 @@ Rcpp::List initial_estimates(const Eigen::MatrixXd & X, const Eigen::VectorXd & 
 int estimate_DE(Eigen::VectorXd& r0, const std::vector<Eigen::MatrixXd> & Z, 
                 std::vector<Eigen::MatrixXd> & Sigma_list, const Eigen::MatrixXi & MAP, 
                 int n, int k, int t, double V_nonzeros_pct, int max_itr, 
-                Eigen::MatrixXd & E, Eigen::MatrixXd & D)
+                Eigen::MatrixXd & E, Eigen::MatrixXd & D,
+                double convergence_cutoff=0.00005)
 {
-    D = Eigen::MatrixXd::Identity(2*k,2*k) * 0.05;
+    D = Eigen::MatrixXd::Identity(2*k,2*k) * 0.0005;
     //Eigen::MatrixXd E_tmp = Eigen::MatrixXd::Identity(k,k) * 0.5; 
-    E = Eigen::MatrixXd::Identity(k,k) * 0.5; 
+    E = Eigen::MatrixXd::Identity(k,k) * 0.0005; 
     double err = 10.;
     double prev_err = 10.;
     int n_itr = 0;
 
-    while (((err > (5*pow(10,-4))) || (prev_err > (5*pow(10,-4)))) && (n_itr < max_itr))
+    while (((err > convergence_cutoff) || (prev_err > convergence_cutoff)) && (n_itr < max_itr))
     {
         Eigen::MatrixXd D_prev = D;
         Eigen::MatrixXd E_prev = E; //E_tmp;
@@ -389,7 +394,8 @@ int estimate_betaV(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
                    Eigen::VectorXd & beta, std::vector<Eigen::MatrixXd> & V, 
                    Eigen::MatrixXd & masterV,
                    const Eigen::MatrixXi & MAP, const Eigen::VectorXi kt_vec, 
-                   int n, int k, int t, int max_itr)
+                   int n, int k, int t, int max_itr,
+                   double convergence_cutoff=5*pow(10,-4))
 {
     int p = X.cols();
     beta = (X.transpose() * X).colPivHouseholderQr().solve(X.transpose()) * y;
@@ -398,7 +404,7 @@ int estimate_betaV(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
     int n_itr = 0;
     std::vector<double> all_err(max_itr);
 
-    while (((err > (5*pow(10,-4))) || (prev_err > (5*pow(10,-4)))) && (n_itr < max_itr))
+    while (((err > convergence_cutoff) || (prev_err > convergence_cutoff)) && (n_itr < max_itr))
     {
         Eigen::VectorXd beta_prev = beta;
         std::vector<Eigen::MatrixXd> V_prev = V;
@@ -437,8 +443,9 @@ int estimate_betaV(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
 // [[Rcpp::export]]
 Rcpp::List estimate_all(const Eigen::MatrixXd & X, const Eigen::VectorXd & y, 
                         const Rcpp::List & Z_in, int n, int k, int t, 
-                        int max_itr=250, std::string covtype="", int idx=0, 
-                        bool REML=false, double eigen_threshold=0.001)
+                        int max_itr=250,
+                        double convergence_cutoff=0.00005,
+                        bool REML=false)
 {
     int p = X.cols();
     std::vector<Eigen::MatrixXd> Sigma_vec(n);
@@ -465,16 +472,15 @@ Rcpp::List estimate_all(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
     Rcpp::Rcout << "times(" << times.size() << ")" << "\n";
     Rcpp::Rcout << printvec(times) <<  "\n";
 
-    //Rcpp::Rcout << "MAP(" << MAP.rows() << "," << MAP.cols() << ")" << "\n";
-    //Rcpp::Rcout << MAP <<  "\n";
+    Rcpp::Rcout << "MAP(" << MAP.rows() << "," << MAP.cols() << ")" << "\n";
+    Rcpp::Rcout << MAP(Eigen::seqN(0,5),Eigen::seqN(0,20)) <<  "\n";*/
 
-    Rcpp::Rcout << "4" << "\n";*/
     initial_estimates(X,y,r0,beta,Sigma_vec,MAP,n,k,t);
     //Sigma_list = init_est[0];
     //beta = init_est[1];
     //r0 = init_est[2];
     //Rcpp::Rcout << "4.5" << "\n";
-    int converged = estimate_betaV(X,y,beta,Sigma_vec,masterV,MAP,MAP.rowwise().sum(),n,k,t,max_itr);
+    int converged = estimate_betaV(X,y,beta,Sigma_vec,masterV,MAP,MAP.rowwise().sum(),n,k,t,max_itr,convergence_cutoff);
     //Rcpp::Rcout << "converged = " << converged << "\n";
     double V_nonzeros_pct = 0;
     int denom = 0;
@@ -512,7 +518,7 @@ Rcpp::List estimate_all(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
     // Eigen::VectorXd& r0, const Eigen::MatrixXd & Z, std::vector<Eigen::MatrixXd> & Sigma_list, 
     // const Eigen::MatrixXi & MAP, int n, int k, int t, double V_nonzeros_pct, int max_itr, 
     // Eigen::MatrixXd & E, Eigen::MatrixXd & D
-    converged += 3*estimate_DE(r0,Z,Sigma_vec,MAP,n,k,t,V_nonzeros_pct,max_itr,E,D);
+    converged += 3*estimate_DE(r0,Z,Sigma_vec,MAP,n,k,t,V_nonzeros_pct,max_itr,E,D,convergence_cutoff);
     //Rcpp::Rcout << "converged = " << converged << "\n";
     Rcpp::List Sigma = Rcpp::wrap(Sigma_vec); //(n); 
     //vec2list(Sigma_vec, Sigma);

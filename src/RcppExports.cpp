@@ -12,8 +12,8 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
 // estimate_all
-Rcpp::List estimate_all(const Eigen::MatrixXd& X, const Eigen::VectorXd& y, const Rcpp::List& Z_in, int n, int k, int t, int max_itr, std::string covtype, int idx, bool REML, double eigen_threshold);
-RcppExport SEXP _PLoCONE_estimate_all(SEXP XSEXP, SEXP ySEXP, SEXP Z_inSEXP, SEXP nSEXP, SEXP kSEXP, SEXP tSEXP, SEXP max_itrSEXP, SEXP covtypeSEXP, SEXP idxSEXP, SEXP REMLSEXP, SEXP eigen_thresholdSEXP) {
+Rcpp::List estimate_all(const Eigen::MatrixXd& X, const Eigen::VectorXd& y, const Rcpp::List& Z_in, int n, int k, int t, int max_itr, double convergence_cutoff, bool REML);
+RcppExport SEXP _PLoCONE_estimate_all(SEXP XSEXP, SEXP ySEXP, SEXP Z_inSEXP, SEXP nSEXP, SEXP kSEXP, SEXP tSEXP, SEXP max_itrSEXP, SEXP convergence_cutoffSEXP, SEXP REMLSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -24,17 +24,15 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type k(kSEXP);
     Rcpp::traits::input_parameter< int >::type t(tSEXP);
     Rcpp::traits::input_parameter< int >::type max_itr(max_itrSEXP);
-    Rcpp::traits::input_parameter< std::string >::type covtype(covtypeSEXP);
-    Rcpp::traits::input_parameter< int >::type idx(idxSEXP);
+    Rcpp::traits::input_parameter< double >::type convergence_cutoff(convergence_cutoffSEXP);
     Rcpp::traits::input_parameter< bool >::type REML(REMLSEXP);
-    Rcpp::traits::input_parameter< double >::type eigen_threshold(eigen_thresholdSEXP);
-    rcpp_result_gen = Rcpp::wrap(estimate_all(X, y, Z_in, n, k, t, max_itr, covtype, idx, REML, eigen_threshold));
+    rcpp_result_gen = Rcpp::wrap(estimate_all(X, y, Z_in, n, k, t, max_itr, convergence_cutoff, REML));
     return rcpp_result_gen;
 END_RCPP
 }
 // estimate_DEbeta
-Rcpp::List estimate_DEbeta(const Eigen::MatrixXd& X, const Eigen::VectorXd& y, Rcpp::List& Z_in, int n, int k, int t, int max_itr, std::string covtype, bool REML, bool verbose, int seed);
-RcppExport SEXP _PLoCONE_estimate_DEbeta(SEXP XSEXP, SEXP ySEXP, SEXP Z_inSEXP, SEXP nSEXP, SEXP kSEXP, SEXP tSEXP, SEXP max_itrSEXP, SEXP covtypeSEXP, SEXP REMLSEXP, SEXP verboseSEXP, SEXP seedSEXP) {
+Rcpp::List estimate_DEbeta(const Eigen::MatrixXd& X, const Eigen::VectorXd& y, Rcpp::List& Z_in, int n, int k, int t, int max_itr, double convergence_cutoff, bool REML, bool verbose, int seed);
+RcppExport SEXP _PLoCONE_estimate_DEbeta(SEXP XSEXP, SEXP ySEXP, SEXP Z_inSEXP, SEXP nSEXP, SEXP kSEXP, SEXP tSEXP, SEXP max_itrSEXP, SEXP convergence_cutoffSEXP, SEXP REMLSEXP, SEXP verboseSEXP, SEXP seedSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -45,11 +43,11 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type k(kSEXP);
     Rcpp::traits::input_parameter< int >::type t(tSEXP);
     Rcpp::traits::input_parameter< int >::type max_itr(max_itrSEXP);
-    Rcpp::traits::input_parameter< std::string >::type covtype(covtypeSEXP);
+    Rcpp::traits::input_parameter< double >::type convergence_cutoff(convergence_cutoffSEXP);
     Rcpp::traits::input_parameter< bool >::type REML(REMLSEXP);
     Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
     Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
-    rcpp_result_gen = Rcpp::wrap(estimate_DEbeta(X, y, Z_in, n, k, t, max_itr, covtype, REML, verbose, seed));
+    rcpp_result_gen = Rcpp::wrap(estimate_DEbeta(X, y, Z_in, n, k, t, max_itr, convergence_cutoff, REML, verbose, seed));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -84,7 +82,7 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_PLoCONE_estimate_all", (DL_FUNC) &_PLoCONE_estimate_all, 11},
+    {"_PLoCONE_estimate_all", (DL_FUNC) &_PLoCONE_estimate_all, 9},
     {"_PLoCONE_estimate_DEbeta", (DL_FUNC) &_PLoCONE_estimate_DEbeta, 11},
     {"_PLoCONE_covCalc", (DL_FUNC) &_PLoCONE_covCalc, 3},
     {"_PLoCONE_calc_ZDZ_plus_E_list", (DL_FUNC) &_PLoCONE_calc_ZDZ_plus_E_list, 6},

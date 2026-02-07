@@ -215,10 +215,14 @@ int make_MAP(const std::vector<Eigen::MatrixXd>& Z,
     {
         nkt += Z[i].rows();
         int zcol = Z[i].cols();
-        Eigen::VectorXd n_times = Z[i](Eigen::all,Eigen::seqN(1,zcol/2,2)).reshaped();
-        for(int j=0;j<n_times.size();++j)
+        for(int l=0; l<k; ++l)
         {
-          all_times.push_back(n_times(j));
+            Eigen::ArrayXi idxs = loc_a_in_b(1,Z[i](Eigen::all,2*l));
+            Eigen::VectorXd n_times = Z[i](idxs,2*l+1).reshaped();
+            for(int j=0;j<n_times.size();++j)
+            {
+                all_times.push_back(n_times(j));
+            }
         }
     }
     r0 = Eigen::VectorXd::Zero(nkt);

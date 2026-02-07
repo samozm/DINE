@@ -339,7 +339,8 @@ void a2_initial_estimates(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
 Rcpp::List estimate_DEbeta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y, 
                            Rcpp::List & Z_in, //Z_in will be destroyed for space sacing reasons
                            int n, int k, int t,
-                           int max_itr=250, std::string covtype="", 
+                           int max_itr=250, 
+                           double convergence_cutoff=0.0001,
                            bool REML=false,
                            bool verbose=false,
                            int seed=1234)
@@ -370,7 +371,7 @@ Rcpp::List estimate_DEbeta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
     double double_prev_err = 8.0;
     int n_itr = 0;
     std::vector<double> all_err(max_itr);
-    while (((err > (5*pow(10,-5))) || (prev_err > (5*pow(10,-5)))) && (n_itr < max_itr))
+    while (((err > convergence_cutoff) || (prev_err > convergence_cutoff)) && (n_itr < max_itr))
     {
         double_prev_err = prev_err;
         prev_err = err;
@@ -406,8 +407,8 @@ Rcpp::List estimate_DEbeta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
 
         // If the last three error values are all the same we are stuck in a loop
         // add a random offset to beta
-        if((double_prev_err - prev_err) < pow(10,-5) && 
-           (prev_err - err) < pow(10,-5) && 
+        if((double_prev_err - prev_err) < convergence_cutoff && 
+           (prev_err - err) < convergence_cutoff && 
            (n_itr < max_itr))
         {
             std::random_device rd{};
