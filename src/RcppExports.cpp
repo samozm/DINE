@@ -13,7 +13,7 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 
 // estimate_all
 Rcpp::List estimate_all(const Eigen::MatrixXd& X, const Eigen::VectorXd& y, const Rcpp::List& Z_in, int n, int k, int t, int max_itr, double convergence_cutoff, bool REML);
-RcppExport SEXP _PLoCONE_estimate_all(SEXP XSEXP, SEXP ySEXP, SEXP Z_inSEXP, SEXP nSEXP, SEXP kSEXP, SEXP tSEXP, SEXP max_itrSEXP, SEXP convergence_cutoffSEXP, SEXP REMLSEXP) {
+RcppExport SEXP _DINE_estimate_all(SEXP XSEXP, SEXP ySEXP, SEXP Z_inSEXP, SEXP nSEXP, SEXP kSEXP, SEXP tSEXP, SEXP max_itrSEXP, SEXP convergence_cutoffSEXP, SEXP REMLSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -32,7 +32,7 @@ END_RCPP
 }
 // estimate_DEbeta
 Rcpp::List estimate_DEbeta(const Eigen::MatrixXd& X, const Eigen::VectorXd& y, Rcpp::List& Z_in, int n, int k, int t, int max_itr, double convergence_cutoff, bool REML, bool verbose, int seed);
-RcppExport SEXP _PLoCONE_estimate_DEbeta(SEXP XSEXP, SEXP ySEXP, SEXP Z_inSEXP, SEXP nSEXP, SEXP kSEXP, SEXP tSEXP, SEXP max_itrSEXP, SEXP convergence_cutoffSEXP, SEXP REMLSEXP, SEXP verboseSEXP, SEXP seedSEXP) {
+RcppExport SEXP _DINE_estimate_DEbeta(SEXP XSEXP, SEXP ySEXP, SEXP Z_inSEXP, SEXP nSEXP, SEXP kSEXP, SEXP tSEXP, SEXP max_itrSEXP, SEXP convergence_cutoffSEXP, SEXP REMLSEXP, SEXP verboseSEXP, SEXP seedSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -53,7 +53,7 @@ END_RCPP
 }
 // covCalc
 Eigen::MatrixXd covCalc(const Eigen::MatrixXd& X, const Eigen::MatrixXi& MAP, bool print);
-RcppExport SEXP _PLoCONE_covCalc(SEXP XSEXP, SEXP MAPSEXP, SEXP printSEXP) {
+RcppExport SEXP _DINE_covCalc(SEXP XSEXP, SEXP MAPSEXP, SEXP printSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -66,7 +66,7 @@ END_RCPP
 }
 // calc_ZDZ_plus_E_list
 Rcpp::List calc_ZDZ_plus_E_list(const std::vector<Eigen::MatrixXd>& Z, const Eigen::MatrixXd& D, const Eigen::VectorXd& E, int n, int k, int t);
-RcppExport SEXP _PLoCONE_calc_ZDZ_plus_E_list(SEXP ZSEXP, SEXP DSEXP, SEXP ESEXP, SEXP nSEXP, SEXP kSEXP, SEXP tSEXP) {
+RcppExport SEXP _DINE_calc_ZDZ_plus_E_list(SEXP ZSEXP, SEXP DSEXP, SEXP ESEXP, SEXP nSEXP, SEXP kSEXP, SEXP tSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -82,14 +82,14 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_PLoCONE_estimate_all", (DL_FUNC) &_PLoCONE_estimate_all, 9},
-    {"_PLoCONE_estimate_DEbeta", (DL_FUNC) &_PLoCONE_estimate_DEbeta, 11},
-    {"_PLoCONE_covCalc", (DL_FUNC) &_PLoCONE_covCalc, 3},
-    {"_PLoCONE_calc_ZDZ_plus_E_list", (DL_FUNC) &_PLoCONE_calc_ZDZ_plus_E_list, 6},
+    {"_DINE_estimate_all", (DL_FUNC) &_DINE_estimate_all, 9},
+    {"_DINE_estimate_DEbeta", (DL_FUNC) &_DINE_estimate_DEbeta, 11},
+    {"_DINE_covCalc", (DL_FUNC) &_DINE_covCalc, 3},
+    {"_DINE_calc_ZDZ_plus_E_list", (DL_FUNC) &_DINE_calc_ZDZ_plus_E_list, 6},
     {NULL, NULL, 0}
 };
 
-RcppExport void R_init_PLoCONE(DllInfo *dll) {
+RcppExport void R_init_DINE(DllInfo *dll) {
     R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
     R_useDynamicSymbols(dll, FALSE);
 }

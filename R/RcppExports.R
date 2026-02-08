@@ -2,18 +2,18 @@
 # Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 estimate_all <- function(X, y, Z_in, n, k, t, max_itr = 250L, convergence_cutoff = 0.00005, REML = FALSE) {
-    .Call('_PLoCONE_estimate_all', PACKAGE = 'DINE', X, y, Z_in, n, k, t, max_itr, convergence_cutoff, REML)
+    .Call('_DINE_estimate_all', PACKAGE = 'DINE', X, y, Z_in, n, k, t, max_itr, convergence_cutoff, REML)
 }
 
 estimate_DEbeta <- function(X, y, Z_in, n, k, t, max_itr = 250L, convergence_cutoff = 0.0001, REML = FALSE, verbose = FALSE, seed = 1234L) {
-    .Call('_PLoCONE_estimate_DEbeta', PACKAGE = 'DINE', X, y, Z_in, n, k, t, max_itr, convergence_cutoff, REML, verbose, seed)
+    .Call('_DINE_estimate_DEbeta', PACKAGE = 'DINE', X, y, Z_in, n, k, t, max_itr, convergence_cutoff, REML, verbose, seed)
 }
 
 covCalc <- function(X, MAP, print) {
-    .Call('_PLoCONE_covCalc', PACKAGE = 'DINE', X, MAP, print)
+    .Call('_DINE_covCalc', PACKAGE = 'DINE', X, MAP, print)
 }
 
 calc_ZDZ_plus_E_list <- function(Z, D, E, n, k, t) {
-    .Call('_PLoCONE_calc_ZDZ_plus_E_list', PACKAGE = 'DINE', Z, D, E, n, k, t)
+    .Call('_DINE_calc_ZDZ_plus_E_list', PACKAGE = 'DINE', Z, D, E, n, k, t)
 }
 

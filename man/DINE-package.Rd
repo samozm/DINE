@@ -1,24 +1,24 @@
-\name{PLoCONE-package}
-\alias{PLoCONE-package}
-\alias{PLoCONE}
+\name{DINE-package}
+\alias{DINE-package}
+\alias{DINE}
 \docType{package}
 \title{
-\packageTitle{PLoCONE}
+\packageTitle{DINE}
 }
 \description{
-\packageDescription{PLoCONE}
+\packageDescription{DINE}
 }
 \details{
 
 The DESCRIPTION file:
-\packageDESCRIPTION{PLoCONE}
-\packageIndices{PLoCONE}
+\packageDESCRIPTION{DINE}
+\packageIndices{DINE}
 ~~ An overview of how to use the package, including the most important functions ~~
 }
 \author{
-\packageAuthor{PLoCONE}
+\packageAuthor{DINE}
 
-Maintainer: \packageMaintainer{PLoCONE}
+Maintainer: \packageMaintainer{DINE}
 }
 \references{
 ~~ Literature or other references for background information ~~
