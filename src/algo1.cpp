@@ -61,6 +61,12 @@ void estimate_D(const Eigen::VectorXd & r0, const std::vector<Eigen::MatrixXd> &
         Eigen::MatrixXd P = ZTZ.colPivHouseholderQr().solve(Z[i].transpose());
         D += P * (V[i] - Et_assemble(E, MAP, i, k, t, V[i].rows())) * P.transpose();
     }
+    Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eigensolver(D);
+    double mineigen = eigensolver.eigenvalues().real().minCoeff();
+    if(mineigen < 0)
+    {
+        D.diagonal() += Eigen::VectorXd::Constant(2*k,abs(mineigen));
+    }
 }
 
 Rcpp::List estimate_D(const Eigen::VectorXd & r0, const std::vector<Eigen::MatrixXd> & Z,
@@ -267,15 +273,10 @@ Rcpp::List threshold_D(Eigen::MatrixXd & D, double nonzero_pct)
     
     int cutoff = std::round(p*p*nonzero_pct) - 1;
     Eigen::VectorXd DoffVecSorted = D.cwiseAbs().reshaped();
-    std::sort(DoffVecSorted.begin(), DoffVecSorted.end(), [](double const& t1, double const& t2){ return t1 < t2; } );
+    std::sort(DoffVecSorted.begin(), DoffVecSorted.end(), [](double const& t1, double const& t2){ return t1 > t2; } );
     double threshold = cutoff == 0 ? 0 : DoffVecSorted[cutoff];
     Eigen::MatrixXd thresholdMat = Eigen::MatrixXd::Constant(p,p,1.0) * threshold;
     Eigen::MatrixXd D_tmp = D.cwiseAbs() - thresholdMat;
-
-    /*Rcpp::Rcout << "cutoff = " << cutoff << "\n";
-    Rcpp::Rcout << "threshold = " << threshold << "\n";
-    Rcpp::Rcout << "threshold = " << thresholdMat << "\n";
-    Rcpp::Rcout << "DoffVecSorted = " << DoffVecSorted(Eigen::seqN(0,5)) << "\n";*/
 
     for (int i=0;i<p; ++i)
     {
@@ -346,10 +347,13 @@ int estimate_DE(Eigen::VectorXd& r0, const std::vector<Eigen::MatrixXd> & Z,
 {
     D = Eigen::MatrixXd::Identity(2*k,2*k) * 0.0005;
     //Eigen::MatrixXd E_tmp = Eigen::MatrixXd::Identity(k,k) * 0.5; 
-    E = Eigen::MatrixXd::Identity(k,k) * 0.0005; 
+    E = Eigen::MatrixXd::Identity(k,k); 
     double err = 10.;
     double prev_err = 10.;
     int n_itr = 0;
+
+    Rcpp::Rcout << "V" << printdims(Sigma_list[1]) << "\n";
+    Rcpp::Rcout << Sigma_list[1](Eigen::seqN(0,5),Eigen::seqN(0,5)) <<  "\n";
 
     while (((err > convergence_cutoff) || (prev_err > convergence_cutoff)) && (n_itr < max_itr))
     {
@@ -365,16 +369,23 @@ int estimate_DE(Eigen::VectorXd& r0, const std::vector<Eigen::MatrixXd> & Z,
         //err = ((D - D_prev).squaredNorm() / (4*k^2) + (E_tmp - E_prev).squaredNorm() / k) / 2;
         err = ((D - D_prev).squaredNorm() / (4*k^2) + (E - E_prev).squaredNorm() / k) / 2;
         n_itr++;
+        /*Rcpp::Rcout << "itr " << n_itr-1 << ": " << err << "\n";
+        Rcpp::Rcout << "D" << printdims(D) << "\n";
+        Rcpp::Rcout << D(Eigen::seqN(0,5),Eigen::seqN(0,5)) <<  "\n";
+        Rcpp::Rcout << "E" << printdims(E) << "\n";
+        Rcpp::Rcout << E(Eigen::seqN(0,5),Eigen::seqN(0,5)) <<  "\n";*/
     }
 
     //E = Eigen::MatrixXd::Zero(k,k);
     //big_to_small_E(E_tmp, E, MAP, n, k, t);
-    
-    //Rcpp::Rcout << "D" << printdims(D) << "\n";
-    //Rcpp::Rcout << D(Eigen::seqN(0,5),Eigen::seqN(0,5)) <<  "\n";
-    //Rcpp::Rcout << "E" << printdims(E) << "\n";
-    //Rcpp::Rcout << E(Eigen::seqN(0,5),Eigen::seqN(0,5)) <<  "\n";
+
     threshold_D(D,V_nonzeros_pct);
+    /*Rcpp::Rcout << "V_nonzeros: " << V_nonzeros_pct << "\n";
+    Rcpp::Rcout << "D" << printdims(D) << "\n";
+    Rcpp::Rcout << D(Eigen::seqN(0,5),Eigen::seqN(0,5)) <<  "\n";
+    Rcpp::Rcout << "E" << printdims(E) << "\n";
+    Rcpp::Rcout << E(Eigen::seqN(0,5),Eigen::seqN(0,5)) <<  "\n";*/
+
     return((n_itr < (max_itr-1)));
 }
 
@@ -531,5 +542,6 @@ Rcpp::List estimate_all(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
            Rcpp::Named("E") = E,Rcpp::Named("D") = D, 
            Rcpp::Named("beta") = beta,
            Rcpp::Named("converged") = converged,
-           Rcpp::Named("MAP")= MAP));
+           Rcpp::Named("MAP")= MAP,
+           Rcpp::Named("V_nonzeros_pct") = V_nonzeros_pct));
 }

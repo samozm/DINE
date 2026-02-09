@@ -7,7 +7,7 @@ estimate <- function(X,y,Z,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(10^
   {
     nkt = nkt + dim(Z[i])[1]
   }
-  
+  V_nonzeros_pct = 0
   if(algo==2)
   {  
     res <- estimate_DEbeta(X,y,Z,n0,k0,t0,max_itr,convergence_cutoff,REML,verbose) 
@@ -18,6 +18,7 @@ estimate <- function(X,y,Z,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(10^
   {
     res <- estimate_all(X,y,Z,n0,k0,t0,max_itr,convergence_cutoff,REML)
     sigma <- 0
+    V_nonzeros_pct <- res$V_nonzeros_pct
   }
   converged <- res$converged
   n_iter <- res$n_iter
@@ -35,5 +36,6 @@ estimate <- function(X,y,Z,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(10^
   #V <- Matrix::bdiag(Sigma)
   return(list(E=E,D=D,V=Sigma,beta=beta,time=timelength,
               converged=converged,sigma=sigma,n_iter=n_iter,
-              all_err=res$all_err,MAP=res$MAP))#,Sigma=V))
+              all_err=res$all_err,MAP=res$MAP,
+              V_nonzeros_pct=V_nonzeros_pct))#,Sigma=V))
 }
