@@ -242,7 +242,8 @@ void estimate_D(const Eigen::MatrixXd & X, const Eigen::VectorXd & r0,
                 const std::vector<Eigen::MatrixXd>& Z,
                 const Eigen::VectorXd & E, Eigen::MatrixXd & Lambda_D, 
                 const Eigen::MatrixXi & MAP, Eigen::MatrixXd & D,
-                int n, int k, int t, int nkt, bool soft=1)
+                int n, int k, int t, int nkt, bool soft=1, 
+                double eigen_threshold=pow(10,-2))
 {
     int p = 2*k;
     Eigen::VectorXd e = Eigen::VectorXd::Zero(nkt);
@@ -259,6 +260,12 @@ void estimate_D(const Eigen::MatrixXd & X, const Eigen::VectorXd & r0,
 
     Eigen::ArrayXXd theta(2*k,2*k);
     a2_threshold_D(R,D,theta,MAP);
+    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eigensolver(D + Eigen::MatrixXd::Identity(p,p));
+    double mineigen = eigensolver.eigenvalues().real().minCoeff();
+    if(mineigen < eigen_threshold)
+    {
+        D.diagonal() += Eigen::VectorXd::Constant(p,abs(mineigen) + eigen_threshold);
+    }
     Lambda_D = (D + Eigen::MatrixXd::Identity(p,p)).llt().matrixL();
 
 }
@@ -363,7 +370,6 @@ Rcpp::List estimate_DEbeta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
     a2_initial_estimates(X,y,Z,MAP,Sigma_list,Lambda_D,D,Lambda_E,beta,r0,n,k,t);
 
     Eigen::VectorXi kt_vec = MAP.rowwise().sum();
-    Eigen::VectorXd beta_offset = Eigen::VectorXd::Zero(p);
     
     double sigma2 = 0.0;
     double err = 10.0;
@@ -375,13 +381,13 @@ Rcpp::List estimate_DEbeta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
     {
         double_prev_err = prev_err;
         prev_err = err;
+        Eigen::MatrixXd fullD_prev = D;
         Eigen::MatrixXd D_prev = Lambda_D;
         Eigen::VectorXd E_prev = Lambda_E;
         Eigen::VectorXd beta_prev = beta;
 
 
         estimate_beta(X,y,kt_vec,MAP,Sigma_list,beta,n,k,t, n_itr);
-        beta += beta_offset;
         r0 = y - X * beta; 
         estimate_D(X,r0,Z,Lambda_E.array().pow(2),Lambda_D,MAP,D,n,k,t,nkt);
         estimate_E(X,r0,Z,Lambda_D,Lambda_E,MAP,n,k,t,nkt);
@@ -396,41 +402,28 @@ Rcpp::List estimate_DEbeta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
 
         double err0 = (Lambda_D - D_prev).squaredNorm() / (k*(2*k+1));
         double err1 = (Lambda_E - E_prev).squaredNorm() / k;
-        double err2 = pow((beta - beta_prev).sum(),2) / p;
+        double err2 = (beta - beta_prev).squaredNorm() / p;
 
         err = (err0 + err1 + err2)/3;
         all_err[n_itr] = err;
         n_itr++;
 
-        //TODO: keep checking if this works
-        beta_offset = Eigen::VectorXd::Zero(p);
-
-        // If the last three error values are all the same we are stuck in a loop
-        // add a random offset to beta
-        if((double_prev_err - prev_err) < convergence_cutoff && 
-           (prev_err - err) < convergence_cutoff && 
-           (n_itr < max_itr))
-        {
-            std::random_device rd{};
-            std::mt19937 gen{rd()};
-            double mean = 0;
-            double var = (beta.array() - beta.mean()).square().sum() / 1000.0;
-            std::normal_distribution<double> distribution(mean, var);
-
-            // Draw a sample from the normal distribution
-            Rcpp::Rcout << "offsetting betas \n";
-            for(int i; i < p; ++i)
-            {
-                beta_offset(i) = distribution(gen);
-            }
-        }
-
         if(verbose)
         {
             Rcpp::Rcout << "overall error after " << n_itr << " iterations: " << err << "\n";
-            Rcpp::Rcout << "D " << err0 << " \n";
-            Rcpp::Rcout << Lambda_D(Eigen::seqN(0,5),Eigen::seqN(0,5)) << "\n\n";
-            Rcpp::Rcout << D_prev(Eigen::seqN(0,5),Eigen::seqN(0,5)) << "\n"; 
+            Rcpp::Rcout << "lambda D "  << printdims(Lambda_D) << err0 << " \n";
+            Eigen::Index maxX, maxY;
+            double max = (Lambda_D - D_prev).maxCoeff(&maxX,&maxY);
+            Rcpp::Rcout <<  "Max: " << max << " (" << maxX << "," << maxY << ")\n";
+            Rcpp::Rcout << Lambda_D(Eigen::seqN(maxX-3,6),Eigen::seqN(maxY-3,6)) << "\n\n";
+            Rcpp::Rcout << D_prev(Eigen::seqN(maxX-3,6),Eigen::seqN(maxY-3,6)) << "\n"; 
+
+            Rcpp::Rcout << "D "  << printdims(D) << " \n";
+            max = (D - fullD_prev).maxCoeff(&maxX,&maxY);
+            Rcpp::Rcout <<  "Max: " << max << " (" << maxX << "," << maxY << ")\n";
+            Rcpp::Rcout << D(Eigen::seqN(maxX-3,6),Eigen::seqN(maxY-3,6)) << "\n\n";
+            Rcpp::Rcout << fullD_prev(Eigen::seqN(maxX-3,6),Eigen::seqN(maxY-3,6)) << "\n"; 
+            Rcpp::Rcout << (Lambda_D * Lambda_D.transpose())(Eigen::seqN(maxX-3,6),Eigen::seqN(maxY-3,6)) << "\n"; 
 
             Rcpp::Rcout << "E " << err1 << " \n";
             Rcpp::Rcout << Lambda_E(Eigen::seqN(0,5)) << "\n\n";
@@ -439,6 +432,10 @@ Rcpp::List estimate_DEbeta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
             Rcpp::Rcout << "beta " << err2 << " \n";
             Rcpp::Rcout << beta(Eigen::seqN(0,5)) << "\n\n";
             Rcpp::Rcout << beta_prev(Eigen::seqN(0,5)) << "\n"; 
+
+            max = (beta - beta_prev).maxCoeff(&maxX,&maxY);
+            Rcpp::Rcout <<  "Max: " << max << " (" << maxX << "," << maxY << ")\n";
+            Rcpp::Rcout << beta(Eigen::seqN(maxX-3,6)) << "\n\n";
 
             Rcpp::Rcout << "sigma " << "\n" << sigma2 << "\n";
         }

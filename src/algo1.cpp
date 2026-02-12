@@ -352,9 +352,6 @@ int estimate_DE(Eigen::VectorXd& r0, const std::vector<Eigen::MatrixXd> & Z,
     double prev_err = 10.;
     int n_itr = 0;
 
-    Rcpp::Rcout << "V" << printdims(Sigma_list[1]) << "\n";
-    Rcpp::Rcout << Sigma_list[1](Eigen::seqN(0,5),Eigen::seqN(0,5)) <<  "\n";
-
     while (((err > convergence_cutoff) || (prev_err > convergence_cutoff)) && (n_itr < max_itr))
     {
         Eigen::MatrixXd D_prev = D;
