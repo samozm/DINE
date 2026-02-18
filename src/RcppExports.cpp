@@ -31,8 +31,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // estimate_DEbeta
-Rcpp::List estimate_DEbeta(const Eigen::MatrixXd& X, const Eigen::VectorXd& y, Rcpp::List& Z_in, int n, int k, int t, int max_itr, double convergence_cutoff, bool REML, bool verbose, int seed);
-RcppExport SEXP _DINE_estimate_DEbeta(SEXP XSEXP, SEXP ySEXP, SEXP Z_inSEXP, SEXP nSEXP, SEXP kSEXP, SEXP tSEXP, SEXP max_itrSEXP, SEXP convergence_cutoffSEXP, SEXP REMLSEXP, SEXP verboseSEXP, SEXP seedSEXP) {
+Rcpp::List estimate_DEbeta(const Eigen::MatrixXd& X, const Eigen::VectorXd& y, Rcpp::List& Z_in, int n, int k, int t, int max_itr, double convergence_cutoff, bool REML, bool verbose, int n_fold, int seed);
+RcppExport SEXP _DINE_estimate_DEbeta(SEXP XSEXP, SEXP ySEXP, SEXP Z_inSEXP, SEXP nSEXP, SEXP kSEXP, SEXP tSEXP, SEXP max_itrSEXP, SEXP convergence_cutoffSEXP, SEXP REMLSEXP, SEXP verboseSEXP, SEXP n_foldSEXP, SEXP seedSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -46,8 +46,9 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type convergence_cutoff(convergence_cutoffSEXP);
     Rcpp::traits::input_parameter< bool >::type REML(REMLSEXP);
     Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    Rcpp::traits::input_parameter< int >::type n_fold(n_foldSEXP);
     Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
-    rcpp_result_gen = Rcpp::wrap(estimate_DEbeta(X, y, Z_in, n, k, t, max_itr, convergence_cutoff, REML, verbose, seed));
+    rcpp_result_gen = Rcpp::wrap(estimate_DEbeta(X, y, Z_in, n, k, t, max_itr, convergence_cutoff, REML, verbose, n_fold, seed));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -83,7 +84,7 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_DINE_estimate_all", (DL_FUNC) &_DINE_estimate_all, 9},
-    {"_DINE_estimate_DEbeta", (DL_FUNC) &_DINE_estimate_DEbeta, 11},
+    {"_DINE_estimate_DEbeta", (DL_FUNC) &_DINE_estimate_DEbeta, 12},
     {"_DINE_covCalc", (DL_FUNC) &_DINE_covCalc, 3},
     {"_DINE_calc_ZDZ_plus_E_list", (DL_FUNC) &_DINE_calc_ZDZ_plus_E_list, 6},
     {NULL, NULL, 0}

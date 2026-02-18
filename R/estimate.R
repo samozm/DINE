@@ -1,5 +1,5 @@
 #' @export
-estimate <- function(X,y,Z,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(10^(-5)),REML=FALSE,verbose=FALSE)
+estimate <- function(X,y,Z,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(10^(-5)),REML=FALSE,verbose=FALSE,n_fold=5)
 {
   startTime <- proc.time()
   nkt = 0
@@ -10,7 +10,7 @@ estimate <- function(X,y,Z,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(10^
   V_nonzeros_pct = 0
   if(algo==2)
   {  
-    res <- estimate_DEbeta(X,y,Z,n0,k0,t0,max_itr,convergence_cutoff,REML,verbose) 
+    res <- estimate_DEbeta(X,y,Z,n0,k0,t0,max_itr,convergence_cutoff,REML,verbose,n_fold=n_fold) 
     #a2.estimate_DEbeta(X,y,Z,n0,k0,t0,max_itr,covtype,idx)
     sigma <- res$sigma
   }

@@ -233,8 +233,9 @@ void a2_threshold_D(const Eigen::MatrixXd & R, Eigen::MatrixXd& sigma,
     error.colwise().sum().minCoeff(&minIndex);
     Eigen::ArrayXXd absCov = cov.cwiseAbs();
     Eigen::ArrayXXd signCov = cov.cwiseSign();
+    theta = params[minIndex] * theta;
 
-    a2_threshold(absCov,signCov,params[minIndex] * theta,sigma);
+    a2_threshold(absCov,signCov,theta,sigma);
 
 }
 
@@ -242,7 +243,9 @@ void estimate_D(const Eigen::MatrixXd & X, const Eigen::VectorXd & r0,
                 const std::vector<Eigen::MatrixXd>& Z,
                 const Eigen::VectorXd & E, Eigen::MatrixXd & Lambda_D, 
                 const Eigen::MatrixXi & MAP, Eigen::MatrixXd & D,
-                int n, int k, int t, int nkt, bool soft=1, 
+                Eigen::ArrayXXd & theta,
+                int n, int k, int t, int nkt, 
+                int itr, bool soft=1, 
                 double eigen_threshold=pow(10,-2))
 {
     int p = 2*k;
@@ -258,8 +261,25 @@ void estimate_D(const Eigen::MatrixXd & X, const Eigen::VectorXd & r0,
         cnt += kt;
     }
 
-    Eigen::ArrayXXd theta(2*k,2*k);
-    a2_threshold_D(R,D,theta,MAP);
+    // TODO: DELTE 3 lines
+    //D = covCalc(R, MAP);
+    //Rcpp::Rcout <<  "Pre thresh D: " << "\n";
+    //Rcpp::Rcout << D(Eigen::seqN(0,6),Eigen::seqN(0,6)) << "\n\n";
+
+    //TODO: only change theta every 5 iterations???
+    if(itr % 5 == 0)
+    {
+        a2_threshold_D(R,D,theta,MAP);
+    }else{
+        Eigen::MatrixXd cov = covCalc(R, MAP);
+        Eigen::ArrayXXd absCov = cov.cwiseAbs();
+        Eigen::ArrayXXd signCov = cov.cwiseSign();
+
+        a2_threshold(absCov,signCov,theta,D);
+    }
+    // TODO: DELETE 2 lines
+    //Rcpp::Rcout <<  "Post thresh D: " << "\n";
+    //Rcpp::Rcout << D(Eigen::seqN(0,6),Eigen::seqN(0,6)) << "\n\n";
     Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eigensolver(D + Eigen::MatrixXd::Identity(p,p));
     double mineigen = eigensolver.eigenvalues().real().minCoeff();
     if(mineigen < eigen_threshold)
@@ -324,10 +344,10 @@ void a2_initial_estimates(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
     Eigen::MatrixXd cov_int = covCalc(R, MAP);
     for(int i=0;i<k;++i)
     {
-        Lambda_E(i) = (cov_int.diagonal().array())(Eigen::seqN(i*t,t)).sqrt().mean();
+        Lambda_E(i) = (cov_int.diagonal().array())(Eigen::seqN(i*t,t)).sqrt().mean() /2;
     }
 
-    cov_int.diagonal() = cov_int.diagonal();
+    cov_int.diagonal() = cov_int.diagonal()/2;
 
     Eigen::MatrixXd B = Eigen::MatrixXd::Zero(q,q); 
     Eigen::MatrixXd ZCZ = Eigen::MatrixXd::Zero(q,q);
@@ -350,6 +370,7 @@ Rcpp::List estimate_DEbeta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
                            double convergence_cutoff=0.0001,
                            bool REML=false,
                            bool verbose=false,
+                           int n_fold=5,
                            int seed=1234)
 {
     int p = X.cols();
@@ -362,6 +383,7 @@ Rcpp::List estimate_DEbeta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
     Eigen::VectorXd Lambda_E(k);
     Eigen::VectorXd beta(p);
     Eigen::VectorXd r0;
+    Eigen::ArrayXXd theta(2*k,2*k);
 
     Eigen::MatrixXi MAP = Eigen::MatrixXi::Zero(n,k*t);
     Eigen::MatrixXd masterZ(k*t,2*k);
@@ -376,6 +398,7 @@ Rcpp::List estimate_DEbeta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
     double prev_err = 9.0;
     double double_prev_err = 8.0;
     int n_itr = 0;
+    int last_offset = 0;
     std::vector<double> all_err(max_itr);
     while (((err > convergence_cutoff) || (prev_err > convergence_cutoff)) && (n_itr < max_itr))
     {
@@ -386,27 +409,54 @@ Rcpp::List estimate_DEbeta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
         Eigen::VectorXd E_prev = Lambda_E;
         Eigen::VectorXd beta_prev = beta;
 
-
         estimate_beta(X,y,kt_vec,MAP,Sigma_list,beta,n,k,t, n_itr);
         r0 = y - X * beta; 
-        estimate_D(X,r0,Z,Lambda_E.array().pow(2),Lambda_D,MAP,D,n,k,t,nkt);
+        estimate_D(X,r0,Z,Lambda_E.array().pow(2),Lambda_D,MAP,D,theta,n,k,t,nkt,n_itr,n_fold);
         estimate_E(X,r0,Z,Lambda_D,Lambda_E,MAP,n,k,t,nkt);
 
         // TODO: delete? 
-        sigma2 = calc_sigma2(Z,D,Lambda_E.array().pow(2),MAP,r0,n,k,t,p,REML);
+        //sigma2 = calc_sigma2(Z,D,Lambda_E.array().pow(2),MAP,r0,n,k,t,p,REML);
         //Lambda_D = Lambda_D * std::sqrt(sigma2);
         //Lambda_E = Lambda_E * std::sqrt(sigma2);
         //D = D * sigma2;
 
-        calc_ZDZ_plus_E_list(Z,D * sigma2,Lambda_E.array().pow(2) * sigma2, Sigma_list, MAP, n, k, t);
+        //calc_ZDZ_plus_E_list(Z,D * sigma2,Lambda_E.array().pow(2) * sigma2, Sigma_list, MAP, n, k, t);
+        calc_ZDZ_plus_E_list(Z,D,Lambda_E.array().pow(2), Sigma_list, MAP, n, k, t);
 
-        double err0 = (Lambda_D - D_prev).squaredNorm() / (k*(2*k+1));
-        double err1 = (Lambda_E - E_prev).squaredNorm() / k;
-        double err2 = (beta - beta_prev).squaredNorm() / p;
+        double err0 = (Lambda_D - D_prev).squaredNorm() / D_prev.squaredNorm();//(var(Lambda_D.reshaped()) * k*(2*k+1));
+        double err1 = (Lambda_E - E_prev).squaredNorm() / E_prev.squaredNorm();//(var(Lambda_E) * k);
+        double err2 = (beta - beta_prev).squaredNorm() / beta_prev.squaredNorm(); //(var(beta)*p);
 
         err = (err0 + err1 + err2)/3;
         all_err[n_itr] = err;
         n_itr++;
+
+        //TODO: keep checking if this works
+        //E_offset = Eigen::VectorXd::Zero(k);
+
+        // If the last three error values are all the same we are stuck in a loop
+        // add a random offset to E
+        /*if((double_prev_err - err) < convergence_cutoff && 
+           (prev_err - err) < convergence_cutoff && 
+           (n_itr < (max_itr-10)) &&
+           (n_itr - last_offset > 10)) // need enough iterations to work offset back out
+        {
+            std::random_device rd{};
+            std::mt19937 gen{rd()};
+            double mean = 0;
+            double vv = var(Lambda_E);
+            std::normal_distribution<double> distribution(mean, vv);
+
+            // Draw a sample from the normal distribution
+            Rcpp::Rcout << "offsetting Es: itr=" << std::to_string(n_itr) << "\n";
+            Rcpp::Rcout << "err = " << std::to_string(err) << ", prev_err = " << std::to_string(prev_err) << ", double_prev_err = " << std::to_string(double_prev_err) << "\n";
+            for(int i=0; i < k; ++i)
+            {
+                Lambda_E(i) = 1.0;//+= distribution(gen);
+            }
+            last_offset = n_itr;
+        }*/
+
 
         if(verbose)
         {

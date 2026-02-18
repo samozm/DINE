@@ -11,6 +11,11 @@
 #include "utils.h"
 // [[Rcpp::depends(RcppEigen)]]
 
+double var(const Eigen::VectorXd & vec)
+{
+    return((vec.array() - vec.array().mean()).square().mean());
+}
+
 std::string printdims(const Eigen::MatrixXd & obj)
 {
     return ("("+ std::to_string(obj.rows()) + ", " + std::to_string(obj.cols()) + ")\n");

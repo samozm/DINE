@@ -386,17 +386,25 @@ int estimate_DE(Eigen::VectorXd& r0, const std::vector<Eigen::MatrixXd> & Z,
     return((n_itr < (max_itr-1)));
 }
 
-int sigma_norm_diff(const std::vector<Eigen::MatrixXd> & A,const std::vector<Eigen::MatrixXd> & B, int n)
+double sigma_norm_diff(const std::vector<Eigen::MatrixXd> & A,const std::vector<Eigen::MatrixXd> & B, int n)
 {
-  int out = 0;
+  double out = 0;
   for(int i=0; i<n; ++i)
   {
     out += (A[i] - B[i]).squaredNorm();
   }
   return(out);
-  
 }
 
+double sigma_norm(const std::vector<Eigen::MatrixXd> & A, int n)
+{
+    double out = 0;
+    for(int i=0; i<n; ++i)
+    {
+        out += A[i].squaredNorm();
+    }
+    return(out);
+}
 
 int estimate_betaV(const Eigen::MatrixXd & X, const Eigen::VectorXd & y, 
                    Eigen::VectorXd & beta, std::vector<Eigen::MatrixXd> & V, 
@@ -421,7 +429,7 @@ int estimate_betaV(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
         estimate_V(X,y,V,beta,MAP,n,k,t);
 
         prev_err = err;
-        err = ((beta - beta_prev).squaredNorm() / p + (sigma_norm_diff(V,V_prev,n)/ (n*pow(t*k,2)))) / 2;
+        err = ((beta - beta_prev).squaredNorm() / beta_prev.squaredNorm() + (sigma_norm_diff(V,V_prev,n)/ sigma_norm(V_prev,n))) / 2;
         all_err[n_itr] = err;
         n_itr++;
     }

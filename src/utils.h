@@ -10,6 +10,8 @@
 #include <cmath>
 // [[Rcpp::depends(RcppEigen)]]
 
+double var(const Eigen::VectorXd & vec);
+
 std::string printdims(const Eigen::MatrixXd & obj);
 
 std::string printvec(const std::vector<double> & obj);
