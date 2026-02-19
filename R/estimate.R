@@ -43,5 +43,6 @@ estimate <- function(X,y,Z,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(10^
   return(list(E=E,D=D,V=Sigma,beta=beta,time=timelength,
               converged=converged,sigma=sigma,n_iter=n_iter,
               all_err=res$all_err,MAP=res$MAP,
-              V_nonzeros_pct=V_nonzeros_pct))#,Sigma=V))
+              V_nonzeros_pct=V_nonzeros_pct,
+              threshold=res$threshold))#,Sigma=V))
 }
