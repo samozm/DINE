@@ -245,7 +245,9 @@ void estimate_D(const Eigen::MatrixXd & X, const Eigen::VectorXd & r0,
                 const Eigen::MatrixXi & MAP, Eigen::MatrixXd & D,
                 Eigen::ArrayXXd & theta,
                 int n, int k, int t, int nkt, 
-                int itr, bool soft=1, 
+                int itr, int n_fold=5, 
+                bool custom_theta=false, 
+                bool soft=1, 
                 double eigen_threshold=pow(10,-2))
 {
     int p = 2*k;
@@ -267,9 +269,10 @@ void estimate_D(const Eigen::MatrixXd & X, const Eigen::VectorXd & r0,
     //Rcpp::Rcout << D(Eigen::seqN(0,6),Eigen::seqN(0,6)) << "\n\n";
 
     //TODO: only change theta every 5 iterations???
-    if(itr % 5 == 0)
+    //give option to have user input threshold theta
+    if(itr % 5 == 0 || custom_theta)
     {
-        a2_threshold_D(R,D,theta,MAP);
+        a2_threshold_D(R,D,theta,MAP,n_fold);
     }else{
         Eigen::MatrixXd cov = covCalc(R, MAP);
         Eigen::ArrayXXd absCov = cov.cwiseAbs();
@@ -366,11 +369,13 @@ void a2_initial_estimates(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
 Rcpp::List estimate_DEbeta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y, 
                            Rcpp::List & Z_in, //Z_in will be destroyed for space sacing reasons
                            int n, int k, int t,
+                           Eigen::ArrayXXd theta,
                            int max_itr=250, 
                            double convergence_cutoff=0.0001,
                            bool REML=false,
                            bool verbose=false,
                            int n_fold=5,
+                           bool custom_theta = false,
                            int seed=1234)
 {
     int p = X.cols();
@@ -383,7 +388,6 @@ Rcpp::List estimate_DEbeta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
     Eigen::VectorXd Lambda_E(k);
     Eigen::VectorXd beta(p);
     Eigen::VectorXd r0;
-    Eigen::ArrayXXd theta(2*k,2*k);
 
     Eigen::MatrixXi MAP = Eigen::MatrixXi::Zero(n,k*t);
     Eigen::MatrixXd masterZ(k*t,2*k);
@@ -411,7 +415,7 @@ Rcpp::List estimate_DEbeta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
 
         estimate_beta(X,y,kt_vec,MAP,Sigma_list,beta,n,k,t, n_itr);
         r0 = y - X * beta; 
-        estimate_D(X,r0,Z,Lambda_E.array().pow(2),Lambda_D,MAP,D,theta,n,k,t,nkt,n_itr,n_fold);
+        estimate_D(X,r0,Z,Lambda_E.array().pow(2),Lambda_D,MAP,D,theta,n,k,t,nkt,n_itr,n_fold,custom_theta);
         estimate_E(X,r0,Z,Lambda_D,Lambda_E,MAP,n,k,t,nkt);
 
         // TODO: delete? 
@@ -509,5 +513,6 @@ Rcpp::List estimate_DEbeta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
            Rcpp::Named("all_err") = all_err,
            Rcpp::Named("converged") = converged, 
            Rcpp::Named("sigma") = sigma2,
-           Rcpp::Named("MAP")= MAP));
+           Rcpp::Named("MAP")= MAP,
+           Rcpp::Named("threshold")=theta));
 }
