@@ -11,7 +11,7 @@ estimate <- function(X,y,Z,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(10^
   if(algo==2)
   {  
     custom_theta = F
-    if(is.na(threshold))
+    if(sum(is.na(threshold)) > 0)
     {
       custom_theta = T
       threshold = matrix(0,2*k0,2*k0)
