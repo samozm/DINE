@@ -270,7 +270,7 @@ void estimate_D(const Eigen::MatrixXd & X, const Eigen::VectorXd & r0,
 
     //TODO: only change theta every 5 iterations???
     //give option to have user input threshold theta
-    if(itr % 5 == 0 || custom_theta)
+    if(itr % 5 == 0 && !custom_theta)
     {
         a2_threshold_D(R,D,theta,MAP,n_fold);
     }else{
