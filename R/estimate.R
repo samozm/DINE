@@ -13,9 +13,10 @@ estimate <- function(X,y,Z,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(10^
     custom_theta = F
     if(sum(is.na(threshold)) > 0)
     {
+      threshold = matrix(0,2*k0,2*k0)
+    } else {
       print("user inputted threshold, using custom theta")
       custom_theta = T
-      threshold = matrix(0,2*k0,2*k0)
     }
     res <- estimate_DEbeta(X,y,Z,n0,k0,t0,threshold,max_itr,convergence_cutoff,REML,verbose,n_fold=n_fold,custom_theta=custom_theta) 
     #a2.estimate_DEbeta(X,y,Z,n0,k0,t0,max_itr,covtype,idx)
