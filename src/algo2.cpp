@@ -295,7 +295,6 @@ void estimate_D(const Eigen::MatrixXd & X, const Eigen::VectorXd & r0,
         D.diagonal() += Eigen::VectorXd::Constant(p,abs(mineigen) + eigen_threshold);
     }
     Lambda_D = (D + Eigen::MatrixXd::Identity(p,p)).llt().matrixL();
-
 }
 
 double calc_sigma2(const std::vector<Eigen::MatrixXd>& Z, 
@@ -366,7 +365,7 @@ void a2_initial_estimates(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
     }
     D = B.colPivHouseholderQr().solve(ZCZ) * B.inverse();
     Lambda_D = (D + Eigen::MatrixXd::Identity(q,q)).llt().matrixL();
-    calc_ZDZ_plus_E_list(Z,D,Lambda_E.array().pow(2),Sigma_list,MAP,n,k,t);
+    //calc_ZDZ_plus_E_list(Z,D,Lambda_E.array().pow(2),Sigma_list,MAP,n,k,t);
 }
 
 
@@ -417,7 +416,7 @@ Rcpp::List estimate_DEbeta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
         double_prev_err = prev_err;
         prev_err = err;
         beta_prev = beta;
-        estimate_beta(X,y,kt_vec,MAP,Sigma_list,beta,n,k,t, n_itr);
+        estimate_beta2(X,y,Z,D,Lambda_E.array().pow(2),kt_vec,MAP,beta,n,k,t);//estimate_beta(X,y,kt_vec,MAP,Sigma_list,beta,n,k,t, n_itr);
         double err2 = (beta - beta_prev).squaredNorm() / beta_prev.squaredNorm(); //(var(beta)*p);
         beta_prev = Eigen::VectorXd::Zero(1);
 
@@ -432,14 +431,7 @@ Rcpp::List estimate_DEbeta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
         double err1 = (Lambda_E - E_prev).squaredNorm() / E_prev.squaredNorm();//(var(Lambda_E) * k);
         E_prev = Eigen::VectorXd::Zero(1);
 
-        // TODO: delete? 
-        //sigma2 = calc_sigma2(Z,D,Lambda_E.array().pow(2),MAP,r0,n,k,t,p,REML);
-        //Lambda_D = Lambda_D * std::sqrt(sigma2);
-        //Lambda_E = Lambda_E * std::sqrt(sigma2);
-        //D = D * sigma2;
-
-        //calc_ZDZ_plus_E_list(Z,D * sigma2,Lambda_E.array().pow(2) * sigma2, Sigma_list, MAP, n, k, t);
-        calc_ZDZ_plus_E_list(Z,D,Lambda_E.array().pow(2), Sigma_list, MAP, n, k, t);
+        //calc_ZDZ_plus_E_list(Z,D,Lambda_E.array().pow(2), Sigma_list, MAP, n, k, t);
 
         err = (err0 + err1 + err2)/3;
         all_err[n_itr] = err;

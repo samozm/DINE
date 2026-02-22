@@ -79,7 +79,6 @@ void build_V_list_from_master(std::vector<Eigen::MatrixXd> & V, const Eigen::Mat
   {
     int kt0 = MAP.rowwise().sum()(i);
     V[i] = Eigen::MatrixXd::Zero(kt0,kt0);
-    int t00 = kt0 / k;
     int cnt0 = 0; 
     for(int j=0; j<(k*t);++j)
     {
@@ -316,7 +315,7 @@ Rcpp::List calc_ZDZ_plus_E_list(const std::vector<Eigen::MatrixXd>& Z,
 void estimate_beta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y, 
                    const Eigen::VectorXi kt_vec, const Eigen::MatrixXi & MAP,
                    const std::vector<Eigen::MatrixXd> & V, Eigen::VectorXd & beta,
-                   int n, int k, int t, int idx)
+                   int n, int k, int t)
 {
     int q = X.cols();
     Eigen::MatrixXd XVX = Eigen::MatrixXd::Zero(q,q);
@@ -362,6 +361,69 @@ void estimate_beta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
         if(v_inv[i])
         {
             beta += XVXinvXt(Eigen::all,Eigen::seqN(cnt,kt)) * V[i].colPivHouseholderQr().solve(y(Eigen::seqN(cnt,kt)));
+        }
+        else
+        {
+            beta += XVXinvXt(Eigen::all,Eigen::seqN(cnt,kt)) * V_inv[i] * y(Eigen::seqN(cnt,kt));
+        }
+        cnt += kt;
+    }
+}
+
+void estimate_beta2(const Eigen::MatrixXd & X, const Eigen::VectorXd & y, 
+                    const std::vector<Eigen::MatrixXd> & Z,
+                    const Eigen::MatrixXd & D,
+                    const Eigen::VectorXd & E,
+                    const Eigen::VectorXi kt_vec, const Eigen::MatrixXi & MAP,
+                    Eigen::VectorXd & beta,
+                    int n, int k, int t)
+{
+    int q = X.cols();
+    Eigen::MatrixXd XVX = Eigen::MatrixXd::Zero(q,q);
+    int cnt = 0;
+    std::vector<bool> v_inv(n);
+    std::vector<Eigen::MatrixXd> V_inv(n);
+    for(int i=0;i<n;++i)
+    {
+        int kt = kt_vec(i);
+        Eigen::MatrixXd V = (Z[i] * D * Z[i].transpose() + Et_assemble(E, MAP, i, k, t, kt));
+        Eigen::FullPivLU<Eigen::MatrixXd> lu(V);
+        v_inv[i] = lu.isInvertible();
+        if(v_inv[i])
+        {
+            XVX += X(Eigen::seqN(cnt,kt),Eigen::all).transpose() * V.colPivHouseholderQr().solve(X(Eigen::seqN(cnt,kt),Eigen::all));
+        }
+        else
+        {
+            //Rcpp::Rcout << "Singular matrix - using pseudoinv" << "\n";
+            //Rcpp::Rcout << "idx = " << idx << " sjt= " << i << "\n";
+            //Rcpp::Rcout << "n0 = " << n << "; k0= " << k << "; t0=" << t << "\n";
+            V_inv[i] = V.completeOrthogonalDecomposition().pseudoInverse();
+            XVX += X(Eigen::seqN(cnt,kt),Eigen::all).transpose() * V_inv[i] * X(Eigen::seqN(cnt,kt),Eigen::all);
+        }
+        cnt += kt;
+    }
+    Eigen::MatrixXd XVXinvXt;
+    Eigen::FullPivLU<Eigen::MatrixXd> lu(XVX);
+    bool v_inv2 = lu.isInvertible();
+    if(v_inv2)
+    {
+        XVXinvXt = XVX.colPivHouseholderQr().solve(X.transpose());
+    }
+    else
+    {
+        //Rcpp::Rcout << "Singular matrix - using pseudoinv" << "\n";
+        XVXinvXt = XVX.completeOrthogonalDecomposition().pseudoInverse() * X.transpose();
+    }
+    beta = Eigen::VectorXd::Zero(q);
+    cnt = 0;
+    for(int i=0;i<n;++i)
+    {
+        int kt = kt_vec(i);
+        if(v_inv[i])
+        {
+            Eigen::MatrixXd V = (Z[i] * D * Z[i].transpose() + Et_assemble(E, MAP, i, k, t, kt));
+            beta += XVXinvXt(Eigen::all,Eigen::seqN(cnt,kt)) * V.colPivHouseholderQr().solve(y(Eigen::seqN(cnt,kt)));
         }
         else
         {
