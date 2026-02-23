@@ -60,7 +60,7 @@ void estimate_beta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
                    int n, int k, int t);
 
 void estimate_beta2(const Eigen::MatrixXd & X, const Eigen::VectorXd & y, 
-                    const std::vector<Eigen::MatrixXd> & Z,
+                    const Eigen::MatrixXd & Z,
                     const Eigen::MatrixXd & D,
                     const Eigen::VectorXd & E,
                     const Eigen::VectorXi kt_vec, const Eigen::MatrixXi & MAP,
@@ -70,6 +70,10 @@ void estimate_beta2(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
 Eigen::MatrixXd Et_assemble(const Eigen::VectorXd & E, 
                             const Eigen::MatrixXi & MAP, 
                             int i, int k, int t, int kt);
+
+Eigen::MatrixXd Z_assemble(const Eigen::MatrixXd & masterZ, 
+                           const Eigen::MatrixXi & MAP,
+                           int i, int k, int t, int kt);
 
 Eigen::VectorXd R_expand(const Eigen::VectorXd & R,
                          const Eigen::MatrixXi & MAP,

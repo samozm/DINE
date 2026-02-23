@@ -283,6 +283,28 @@ Eigen::MatrixXd Et_assemble(const Eigen::VectorXd & E,
   return(Et);
 }
 
+Eigen::MatrixXd Z_assemble(const Eigen::MatrixXd & masterZ, 
+                           const Eigen::MatrixXi & MAP,
+                           int i, int k, int t, int kt)
+{
+    Eigen::MatrixXd Z_out = Eigen::MatrixXd::Zero(kt,2*k);
+    int cnt = 0;
+    int cnt2 = 0;
+    for(int j = 0; j<k; ++j)
+    {
+        for(int l = 0; l < t; ++l)
+        {
+            if(MAP(i,cnt2) == 1)
+            {
+                Z_out(cnt,Eigen::all) = masterZ(cnt2,Eigen::all);
+                cnt++;
+            }
+            cnt2++;
+        }
+    }
+    return(Z_out);
+}
+
 void calc_ZDZ_plus_E_list(const std::vector<Eigen::MatrixXd>& Z,
                           const Eigen::MatrixXd & D, const Eigen::VectorXd & E,
                           std::vector<Eigen::MatrixXd> & out, 
@@ -371,7 +393,7 @@ void estimate_beta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
 }
 
 void estimate_beta2(const Eigen::MatrixXd & X, const Eigen::VectorXd & y, 
-                    const std::vector<Eigen::MatrixXd> & Z,
+                    const Eigen::MatrixXd & Z,
                     const Eigen::MatrixXd & D,
                     const Eigen::VectorXd & E,
                     const Eigen::VectorXi kt_vec, const Eigen::MatrixXi & MAP,
@@ -386,7 +408,8 @@ void estimate_beta2(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
     for(int i=0;i<n;++i)
     {
         int kt = kt_vec(i);
-        Eigen::MatrixXd V = (Z[i] * D * Z[i].transpose() + Et_assemble(E, MAP, i, k, t, kt));
+        Eigen::MatrixXd Zi = Z_assemble(Z,MAP,i,k,t,kt);
+        Eigen::MatrixXd V = (Zi * D * Zi.transpose() + Et_assemble(E, MAP, i, k, t, kt));
         Eigen::FullPivLU<Eigen::MatrixXd> lu(V);
         v_inv[i] = lu.isInvertible();
         if(v_inv[i])
@@ -422,7 +445,8 @@ void estimate_beta2(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
         int kt = kt_vec(i);
         if(v_inv[i])
         {
-            Eigen::MatrixXd V = (Z[i] * D * Z[i].transpose() + Et_assemble(E, MAP, i, k, t, kt));
+            Eigen::MatrixXd Zi = Z_assemble(Z,MAP,i,k,t,kt);
+            Eigen::MatrixXd V = (Zi * D * Zi.transpose() + Et_assemble(E, MAP, i, k, t, kt));
             beta += XVXinvXt(Eigen::all,Eigen::seqN(cnt,kt)) * V.colPivHouseholderQr().solve(y(Eigen::seqN(cnt,kt)));
         }
         else

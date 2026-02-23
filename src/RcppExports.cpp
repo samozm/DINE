@@ -31,14 +31,14 @@ BEGIN_RCPP
 END_RCPP
 }
 // estimate_DEbeta
-Rcpp::List estimate_DEbeta(const Eigen::MatrixXd& X, const Eigen::VectorXd& y, Rcpp::List& Z_in, int n, int k, int t, Eigen::ArrayXXd theta, int max_itr, double convergence_cutoff, bool REML, bool verbose, int n_fold, bool custom_theta, int seed);
+Rcpp::List estimate_DEbeta(const Eigen::MatrixXd& X, const Eigen::VectorXd& y, std::vector<Eigen::MatrixXd>& Z_in, int n, int k, int t, Eigen::ArrayXXd theta, int max_itr, double convergence_cutoff, bool REML, bool verbose, int n_fold, bool custom_theta, int seed);
 RcppExport SEXP _DINE_estimate_DEbeta(SEXP XSEXP, SEXP ySEXP, SEXP Z_inSEXP, SEXP nSEXP, SEXP kSEXP, SEXP tSEXP, SEXP thetaSEXP, SEXP max_itrSEXP, SEXP convergence_cutoffSEXP, SEXP REMLSEXP, SEXP verboseSEXP, SEXP n_foldSEXP, SEXP custom_thetaSEXP, SEXP seedSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type X(XSEXP);
     Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type y(ySEXP);
-    Rcpp::traits::input_parameter< Rcpp::List& >::type Z_in(Z_inSEXP);
+    Rcpp::traits::input_parameter< std::vector<Eigen::MatrixXd>& >::type Z_in(Z_inSEXP);
     Rcpp::traits::input_parameter< int >::type n(nSEXP);
     Rcpp::traits::input_parameter< int >::type k(kSEXP);
     Rcpp::traits::input_parameter< int >::type t(tSEXP);
