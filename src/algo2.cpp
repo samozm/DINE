@@ -345,11 +345,6 @@ void estimate_D(const Eigen::MatrixXd & X, const Eigen::VectorXd & r0,
         Eigen::ArrayXXd absCov = cov.cwiseAbs();
         Eigen::ArrayXXd signCov = cov.cwiseSign();
 
-        if(itr == 0)
-        {
-            Rcpp::Rcout << "using custom theta" << "\n";
-        }
-
         a2_threshold(absCov,signCov,theta,D);
     }
     // TODO: DELETE 2 lines
