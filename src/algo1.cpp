@@ -30,8 +30,8 @@ Rcpp::List estimate_V(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
     for(int i = 0; i<n; ++i)
     {
         int kt0 = MAP.rowwise().sum()(i);
-        std::deque<int> idxs;
-        std::deque<int> waste;
+        std::vector<int> idxs;
+        std::vector<int> waste;
         find_all(MAP(i,Eigen::all),1,idxs,waste);
         if(idxs.size() != kt0)
         {
@@ -219,8 +219,8 @@ void threshold_V(const Eigen::MatrixXd & R, Eigen::MatrixXd& sigma,
     }
     for (int i =0;i<n_fold; ++i)
     {
-        std::deque<int> val_idx;
-        std::deque<int> not_val_idx;
+        std::vector<int> val_idx;
+        std::vector<int> not_val_idx;
         find_all(part,i,val_idx,not_val_idx);
         Eigen::MatrixXd covTest = covCalc(R(val_idx,Eigen::all),MAP(val_idx,Eigen::all));
         double lower = 0.0;
@@ -309,8 +309,8 @@ void initial_estimates(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
     for(int i = 0; i<n; ++i)
     {
         int kt0 = MAP.rowwise().sum()(i);
-        std::deque<int> idxs;
-        std::deque<int> waste;
+        std::vector<int> idxs;
+        std::vector<int> waste;
         find_all(MAP(i,Eigen::all),1,idxs,waste);
         R(i,idxs) = r_out(Eigen::seqN(current,kt0));
         current += kt0;
@@ -444,8 +444,8 @@ int estimate_betaV(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
     for(int i = 0; i<n; ++i)
     {
       int kt0 = MAP.rowwise().sum()(i);
-      std::deque<int> idxs;
-      std::deque<int> waste;
+      std::vector<int> idxs;
+      std::vector<int> waste;
       find_all(MAP(i,Eigen::all),1,idxs,waste);
       R(i,idxs) = r0(Eigen::seqN(current,kt0));
       current += kt0;

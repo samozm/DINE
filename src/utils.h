@@ -39,9 +39,9 @@ void vec2list(const std::vector<Eigen::MatrixXd>& vec, Rcpp::List & out);
 
 void list2vec(std::vector<Eigen::MatrixXd>& vec, const Rcpp::List & list);
 
-void find_all(const std::vector<int> & vec, const int & val, std::deque<int> & out_val, std::deque<int> & out_not_val);
+void find_all(const std::vector<int> & vec, const int & val, std::vector<int> & out_val, std::vector<int> & out_not_val);
 
-void find_all(const Eigen::VectorXi & vec, const int & val, std::deque<int> & out_val, std::deque<int> & out_not_val);
+void find_all(const Eigen::VectorXi & vec, const int & val, std::vector<int> & out_val, std::vector<int> & out_not_val);
 
 void calc_ZDZ_plus_E_list(const std::vector<Eigen::MatrixXd>& Z,
                           const Eigen::MatrixXd & D, const Eigen::VectorXd & E,
@@ -94,3 +94,5 @@ Eigen::VectorXd R_expand(const Eigen::VectorXd & R,
                          int idx, int q);
 
 Eigen::MatrixXd RtR(const Eigen::MatrixXd & R, const Eigen::MatrixXi & MAP);
+
+bool check_openmp();

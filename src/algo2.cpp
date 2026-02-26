@@ -146,7 +146,7 @@ void calc_e(const Eigen::VectorXd & r0, const Eigen::MatrixXd & Z,
     Eigen::VectorXd BDBinvZr = BDBinv_ldlt.solve(Zr);
     //Eigen::VectorXd EZiHZEEZBDBinvZr(p);
     Eigen::MatrixXd ZEEZsolve = BDBinvZEEZ_llt.solve(ZEEZ);
-    Eigen::VectorXd BDBinvZrZEEZsolveBDBinvZr = BDBinvZr - (ZEEZsolve - BDBinvZr);
+    Eigen::VectorXd BDBinvZrZEEZsolveBDBinvZr = BDBinvZr - (ZEEZsolve * BDBinvZr);
     cnt = 0; 
     for(int i=0;i<n;++i)
     {
@@ -183,25 +183,41 @@ void a2_thresholdRange(const Eigen::MatrixXd & R, Eigen::ArrayXXd& theta, Eigen:
 void a2_threshold(const Eigen::MatrixXd& abscov, const Eigen::MatrixXd& signcov, 
                const Eigen::MatrixXd& thetalambda, Eigen::MatrixXd& sigma_out)
 {
-    // sigmaTmp is positives of abscov-lambda
-    Eigen::ArrayXXd sigmaTmp = (abscov - thetalambda).array().max(0.0);
-    // Off-diagonal masking: sigmaTmp(i,j) = 0 if diag(i) or diag(j) is 0
-    // This can be done via outer product of the diagonal mask
-    Eigen::ArrayXd diagYN = (abscov.diagonal().array() - thetalambda.diagonal().array() > 0).cast<double>();
-
-    Eigen::ArrayXXd dYNdYNt = (diagYN.matrix() * diagYN.matrix().transpose()).array();
-    Eigen::MatrixXd sigmaDYNdYNt = (sigmaTmp * dYNdYNt).matrix();
-
-    sigma_out.noalias() = sigmaDYNdYNt.cwiseProduct(signcov);
-
-    // set negative diagonals to 0
-    sigma_out.diagonal() = (abscov.diagonal().array() - thetalambda.diagonal().array()).max(0.0);
+    int p = abscov.rows();
+    // Pre-calculate the diagonal threshold checks 
+    Eigen::VectorXd diag_diff = abscov.diagonal() - thetalambda.diagonal();
+    
+    // Loop through the matrix without allocating any temporary arrays
+    for(int i = 0; i < p; ++i) 
+    {
+        for(int j = 0; j < p; ++j) 
+        {
+            // Apply the diagonal mask and threshold in one step
+            if (diag_diff(i) > 0.0 && diag_diff(j) > 0.0) 
+            {
+                double val = abscov(i, j) - thetalambda(i, j);
+                sigma_out(i, j) = std::max(0.0, val) * signcov(i, j);
+            } 
+            else 
+            {
+                sigma_out(i, j) = 0.0;
+            }
+        }
+    }
+    
+    // Guarantee exact non-negative diagonals
+    for(int i = 0; i < p; ++i) 
+    {
+        sigma_out(i, i) = std::max(0.0, diag_diff(i));
+    }
 }
 
 void a2_threshold_D(const Eigen::MatrixXd & R, Eigen::MatrixXd& sigma, 
                  Eigen::ArrayXXd & theta, const Eigen::MatrixXi & MAP, 
-                 int n_fold=5)
+                 int n_fold=5,int seed=1234)
 {
+    auto rng = std::default_random_engine(seed);
+
     int n = R.rows();
     int p = R.cols();
     int nParam = 100;
@@ -215,7 +231,6 @@ void a2_threshold_D(const Eigen::MatrixXd & R, Eigen::MatrixXd& sigma,
     double jump = (upper - lower)/double(nParam);
     double ctr = lower;
     std::generate(params.begin(), params.end(), [&ctr,&jump]{ return ctr+=jump;});
-    auto rng = std::default_random_engine{};
     std::vector<int> part(n);
     std::iota(part.begin(), part.end(), 0);
     std::shuffle(part.begin(),part.end(), rng);
@@ -230,8 +245,8 @@ void a2_threshold_D(const Eigen::MatrixXd & R, Eigen::MatrixXd& sigma,
     }
     for (int i=0;i<n_fold; ++i)
     {
-        std::deque<int> val_idx;
-        std::deque<int> not_val_idx;
+        std::vector<int> val_idx;
+        std::vector<int> not_val_idx;
         find_all(part,i,val_idx,not_val_idx);
         double lower = 0.0;
         double upper = 0.0; 
@@ -261,6 +276,7 @@ void estimate_D(const Eigen::MatrixXd & X, const Eigen::VectorXd & r0,
                 int n, int k, int t, int nkt, 
                 int itr, int n_fold=5, 
                 bool custom_theta=false, 
+                int seed=1111,
                 bool soft=1, 
                 double eigen_threshold=pow(10,-2))
 {
@@ -288,7 +304,7 @@ void estimate_D(const Eigen::MatrixXd & X, const Eigen::VectorXd & r0,
     //give option to have user input threshold theta
     if(itr % 5 == 0 && !custom_theta)
     {
-        a2_threshold_D(R,D,theta,MAP,n_fold);
+        a2_threshold_D(R,D,theta,MAP,n_fold,seed=seed);
     }else{
         Eigen::MatrixXd cov = covCalc(R, MAP);
         D.setZero(p,p);
@@ -383,8 +399,8 @@ void a2_initial_estimates(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
     int nkt = 0;
     for(int i = 0; i<n; ++i)
     {
-        std::deque<int> idxs;
-        std::deque<int> waste;
+        std::vector<int> idxs;
+        std::vector<int> waste;
         int kt0 = MAP.rowwise().sum()(i);
         find_all(MAP(i,Eigen::all),1,idxs,waste);
         R(i,idxs) = r.segment(nkt,kt0);

@@ -187,8 +187,10 @@ void list2vec(std::vector<Eigen::MatrixXd>& vec, const Rcpp::List & list)
     }
 }
 
-void find_all(const std::vector<int> & vec, const int & val, std::deque<int> & out_val, std::deque<int> & out_not_val)
+void find_all(const std::vector<int> & vec, const int & val, std::vector<int> & out_val, std::vector<int> & out_not_val)
 {
+    out_val.reserve(vec.size());
+    out_not_val.reserve(vec.size());
     for(int iter=0;iter<vec.size();++iter)
     {
         if(vec[iter] == val)
@@ -201,8 +203,10 @@ void find_all(const std::vector<int> & vec, const int & val, std::deque<int> & o
     }
 }
 
-void find_all(const Eigen::VectorXi & vec, const int & val, std::deque<int> & out_val, std::deque<int> & out_not_val)
+void find_all(const Eigen::VectorXi & vec, const int & val, std::vector<int> & out_val, std::vector<int> & out_not_val)
 {
+    out_val.reserve(vec.size());
+    out_not_val.reserve(vec.size());
     for(int iter=0;iter<vec.size();++iter)
     {
         if(vec(iter) == val)
