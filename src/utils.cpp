@@ -560,3 +560,12 @@ Eigen::MatrixXd RtR(const Eigen::MatrixXd & R, const Eigen::MatrixXi & MAP)//con
     }
     return cov;
 }
+
+// [[Rcpp::export]]
+bool check_openmp() {
+#ifdef _OPENMP
+    return true;
+#else
+    return false;
+#endif
+}
