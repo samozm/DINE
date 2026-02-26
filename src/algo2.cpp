@@ -440,7 +440,9 @@ Rcpp::List estimate_DEbeta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
     Eigen::setNbThreads(1); 
     
     // 2. Control OpenMP dynamically from R!
-    omp_set_num_threads(n_threads);
+    #ifdef _OPENMP
+        omp_set_num_threads(n_threads);
+    #endif
 
     int p = X.cols();
     std::vector<Eigen::MatrixXd> Sigma_list(n);

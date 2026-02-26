@@ -9,6 +9,7 @@
 #include <deque>
 #include <limits>
 #include <cmath>
+#include <omp.h>
 #include "utils.h"
 // [[Rcpp::depends(RcppEigen)]]
 

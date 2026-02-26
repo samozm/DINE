@@ -9,7 +9,9 @@
 #include <deque>
 #include <limits>
 #include <cmath>
+#ifdef _OPENMP
 #include <omp.h>
+#endif
 // [[Rcpp::depends(RcppEigen)]]
 
 double var(const Eigen::VectorXd & vec);
