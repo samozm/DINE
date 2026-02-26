@@ -1,15 +1,5 @@
 #define STRICT_R_HEADERS
 #define EIGEN_PERMANENTLY_DISABLE_STUPID_WARNINGS
-#include <Rcpp.h>
-#include <RcppEigen.h>
-#include <vector>
-#include <algorithm>
-#include <random>
-#include <typeinfo>
-#include <deque>
-#include <limits>
-#include <cmath>
-#include <omp.h>
 #include "utils.h"
 // [[Rcpp::depends(RcppEigen)]]
 
