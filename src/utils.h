@@ -1,4 +1,5 @@
 #define STRICT_R_HEADERS
+#define EIGEN_PERMANENTLY_DISABLE_STUPID_WARNINGS
 #include <Rcpp.h>
 #include <RcppEigen.h>
 #include <vector>
@@ -8,6 +9,7 @@
 #include <deque>
 #include <limits>
 #include <cmath>
+#include <omp.h>
 // [[Rcpp::depends(RcppEigen)]]
 
 double var(const Eigen::VectorXd & vec);
@@ -71,9 +73,19 @@ Eigen::MatrixXd Et_assemble(const Eigen::VectorXd & E,
                             const Eigen::MatrixXi & MAP, 
                             int i, int k, int t, int kt);
 
+void Et_assemble_IP(const Eigen::VectorXd & E, 
+                       Eigen::MatrixXd & Et,
+                 const Eigen::MatrixXi & MAP, 
+                 int i, int k, int t, int kt);
+
 Eigen::MatrixXd Z_assemble(const Eigen::MatrixXd & masterZ, 
                            const Eigen::MatrixXi & MAP,
                            int i, int k, int t, int kt);
+
+void Z_assemble_IP(const Eigen::MatrixXd & masterZ, 
+                      Eigen::MatrixXd & Z_out,
+                const Eigen::MatrixXi & MAP,
+                int i, int k, int t, int kt);
 
 Eigen::VectorXd R_expand(const Eigen::VectorXd & R,
                          const Eigen::MatrixXi & MAP,

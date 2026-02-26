@@ -5,8 +5,8 @@ estimate_all <- function(X, y, Z_in, n, k, t, max_itr = 250L, convergence_cutoff
     .Call('_DINE_estimate_all', PACKAGE = 'DINE', X, y, Z_in, n, k, t, max_itr, convergence_cutoff, REML)
 }
 
-estimate_DEbeta <- function(X, y, Z_in, n, k, t, theta, max_itr = 250L, convergence_cutoff = 0.0001, REML = FALSE, verbose = FALSE, n_fold = 5L, custom_theta = FALSE, seed = 1234L) {
-    .Call('_DINE_estimate_DEbeta', PACKAGE = 'DINE', X, y, Z_in, n, k, t, theta, max_itr, convergence_cutoff, REML, verbose, n_fold, custom_theta, seed)
+estimate_DEbeta <- function(X, y, Z_in, n, k, t, theta, max_itr = 250L, convergence_cutoff = 0.0001, REML = FALSE, verbose = FALSE, timings = FALSE, n_fold = 5L, custom_theta = FALSE, n_threads = 1L, seed = 1234L) {
+    .Call('_DINE_estimate_DEbeta', PACKAGE = 'DINE', X, y, Z_in, n, k, t, theta, max_itr, convergence_cutoff, REML, verbose, timings, n_fold, custom_theta, n_threads, seed)
 }
 
 covCalc <- function(X, MAP, print) {

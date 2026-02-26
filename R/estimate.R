@@ -1,5 +1,5 @@
 #' @export
-estimate <- function(X,y,Z,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(10^(-5)),REML=FALSE,verbose=FALSE,n_fold=5,threshold=NA)
+estimate <- function(X,y,Z,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(10^(-5)),REML=FALSE,verbose=FALSE,timings=FALSE,n_fold=5,threshold=NA)
 {
   startTime <- proc.time()
   nkt = 0
@@ -17,7 +17,7 @@ estimate <- function(X,y,Z,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(10^
     } else {
       custom_theta = T
     }
-    res <- estimate_DEbeta(X,y,Z,n0,k0,t0,threshold,max_itr,convergence_cutoff,REML,verbose,n_fold=n_fold,custom_theta=custom_theta) 
+    res <- estimate_DEbeta(X,y,Z,n0,k0,t0,threshold,max_itr,convergence_cutoff,REML,verbose,timings,n_fold=n_fold,custom_theta=custom_theta) 
     #a2.estimate_DEbeta(X,y,Z,n0,k0,t0,max_itr,covtype,idx)
     sigma <- res$sigma
   }
@@ -27,22 +27,12 @@ estimate <- function(X,y,Z,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(10^
     sigma <- 0
     V_nonzeros_pct <- res$V_nonzeros_pct
   }
-  converged <- res$converged
-  n_iter <- res$n_iter
-  Sigma <- res$Sigma
-  D <- res$D 
-  E <- res$E 
-  
-  beta <- res$beta
-  
-  n_iter <- res$n_iter
   
   exeTimeClass <- proc.time() - startTime
   exeTime <- as.numeric(exeTimeClass[3])
   timelength <- exeTime
-  #V <- Matrix::bdiag(Sigma)
-  return(list(E=E,D=D,V=Sigma,beta=beta,time=timelength,
-              converged=converged,sigma=sigma,n_iter=n_iter,
+  return(list(E=res$E,D=res$D,V=res$Sigma,beta=res$beta,time=timelength,
+              converged=res$converged,sigma=sigma,n_iter=res$n_iter,
               all_err=res$all_err,MAP=res$MAP,
               V_nonzeros_pct=V_nonzeros_pct,
               threshold=res$threshold))#,Sigma=V))

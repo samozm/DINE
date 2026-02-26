@@ -1,4 +1,5 @@
 #define STRICT_R_HEADERS
+#define EIGEN_PERMANENTLY_DISABLE_STUPID_WARNINGS
 #include "utils.h"
 
 void big_to_small_E(const Eigen::MatrixXd & big_E, Eigen::MatrixXd & E, 

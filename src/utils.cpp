@@ -1,4 +1,5 @@
 #define STRICT_R_HEADERS
+#define EIGEN_PERMANENTLY_DISABLE_STUPID_WARNINGS
 #include <Rcpp.h>
 #include <RcppEigen.h>
 #include <vector>
@@ -112,52 +113,67 @@ Eigen::MatrixXd covCalc(const Eigen::MatrixXd & X, const Eigen::MatrixXi & MAP, 
 {
     int n = X.rows();
     int p = X.cols();
+
+    // Select values of X where MAP is positive, otherwise input 0
+    Eigen::MatrixXd Xz = (MAP.array() != 0).select(X,0.0);
+
+    Eigen::MatrixXd MAPd = MAP.cast<double>();
+    // Sum of Xi * Xj for all pairs of nodes
+    Eigen::MatrixXd SumXY = Xz.transpose() * Xz;
+    // number of observations shared by i and j
+    Eigen::MatrixXd N = MAPd.transpose() * MAPd;
+    // Sum of X(i,) where MAP(i,j) is 1
+    Eigen::MatrixXd SumX_shared = Xz.transpose() * MAPd;
     Eigen::MatrixXd cov = Eigen::MatrixXd::Zero(p,p);
 
+    #pragma omp parallel for schedule(dynamic)
     for(int i=0; i < p; ++i)
     {
         for(int j=0; j <= i; ++j)
         {
-            double xmean = 0.0;
-            double ymean = 0.0;
-            int n_obs = 0;
-
-            for(int l=0; l < n; ++l)
+            double Nij = N(i,j);
+            if(Nij > 1.0)
             {
-                if(MAP(l,i) != 0 && MAP(l,j) != 0)
+                double val = (SumXY(i, j) - (SumX_shared(i, j) * SumX_shared(j, i) / Nij)) / Nij;
+                cov(i,j) = val;
+                if(i != j) 
                 {
-                    n_obs++;
-                    xmean += X(l,i);
-                    ymean += X(l,j);
+                    cov(j,i) = val;
                 }
-            }
-            if(n_obs == 0)
-            {
-                continue;
-            }
-            xmean = xmean / (n_obs);
-            ymean = ymean / (n_obs);
-            for(int l=0; l < n; ++l)
-            {
-                if(MAP(l,i) != 0 && MAP(l,j) != 0)
-                {
-                    cov(i,j) += ((X(l,i) - xmean) * (X(l,j) - ymean) / (n_obs));
-                    if(i != j)
-                    {
-                        cov(j,i) += ((X(l,i) - xmean) * (X(l,j) - ymean) / (n_obs));
-                    }
-                } 
-            }
-
-            if(print)
-            {    
-                Rcpp::Rcout << "n_obs=" << n_obs << "\n";
-                Rcpp::Rcout << "xmean=" << xmean << "\n";
-                Rcpp::Rcout << "ymean=" << ymean << "\n";
             }
         }
     }
     return(cov);
+}
+
+Eigen::VectorXd varCalcDiag(const Eigen::MatrixXd & X, const Eigen::MatrixXi & MAP, bool print)
+{
+    int n = X.rows();
+    int p = X.cols();
+    Eigen::VectorXd var = Eigen::VectorXd::Zero(p);
+
+    for(int j = 0; j < p; ++j)
+    {
+        double sum = 0.0;
+        double sumSq = 0.0;
+        int n_obs = 0;
+        for(int i=0;i<n;++i)
+        {
+            if(MAP(i,j) != 0)
+            {
+                double tmp = X(i,j);
+                sum += tmp;
+                sumSq += tmp * tmp;
+                n_obs++;
+            }
+        }
+        if(n_obs > 1)
+        {
+            double mean = sum/n_obs;
+            var(j) = (sumSq / n_obs) - (mean * mean);
+        }
+    }
+    return(var);
 }
 
 void vec2list(const std::vector<Eigen::MatrixXd>& vec, Rcpp::List & out)
@@ -305,6 +321,45 @@ Eigen::MatrixXd Z_assemble(const Eigen::MatrixXd & masterZ,
     return(Z_out);
 }
 
+void Et_assemble_IP(const Eigen::VectorXd & E, 
+                       Eigen::MatrixXd & Et,
+                 const Eigen::MatrixXi & MAP, 
+                 int i, int k, int t, int kt)
+{
+    Et.setZero(kt,kt);
+    int cnt = 0;
+    int cnt2 = 0;
+    for(int j = 0; j < k; ++j)
+    {
+        for(int l = 0; l < t; ++l)
+        {
+        if(MAP(i,cnt2) == 1)
+        {
+            Et.diagonal()(cnt) = E(j);
+            cnt++;
+        }
+        cnt2++;
+        }
+    }
+}
+
+void Z_assemble_IP(const Eigen::MatrixXd & masterZ, 
+                      Eigen::MatrixXd & Z_out,
+                const Eigen::MatrixXi & MAP,
+                int i, int k, int t, int kt)
+{
+    Z_out.resize(kt,2*k);
+    int cnt = 0;
+    for(int j = 0; j<k*t; ++j)
+    {
+        if(MAP(i,j) == 1)
+        {
+            Z_out.row(cnt).noalias() = masterZ.row(j);
+            cnt++;
+        }
+    }
+}
+
 void calc_ZDZ_plus_E_list(const std::vector<Eigen::MatrixXd>& Z,
                           const Eigen::MatrixXd & D, const Eigen::VectorXd & E,
                           std::vector<Eigen::MatrixXd> & out, 
@@ -402,58 +457,54 @@ void estimate_beta2(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
 {
     int q = X.cols();
     Eigen::MatrixXd XVX = Eigen::MatrixXd::Zero(q,q);
+    Eigen::VectorXd XVy = Eigen::VectorXd::Zero(q);
+    Eigen::MatrixXd Zi, Et, ZiD, V, Xi;
+    Eigen::VectorXd yi;
     int cnt = 0;
-    std::vector<bool> v_inv(n);
-    std::vector<Eigen::MatrixXd> V_inv(n);
+    
     for(int i=0;i<n;++i)
     {
         int kt = kt_vec(i);
-        Eigen::MatrixXd Zi = Z_assemble(Z,MAP,i,k,t,kt);
-        Eigen::MatrixXd V = (Zi * D * Zi.transpose() + Et_assemble(E, MAP, i, k, t, kt));
-        Eigen::FullPivLU<Eigen::MatrixXd> lu(V);
-        v_inv[i] = lu.isInvertible();
-        if(v_inv[i])
+        Z_assemble_IP(Z,Zi,MAP,i,k,t,kt);
+        Et_assemble_IP(E,Et,MAP,i,k,t,kt);
+        ZiD.resize(kt, 2*k);
+        ZiD.noalias() = Zi * D;
+
+        V.resize(kt, kt);
+        V.noalias() = ZiD * Zi.transpose();
+        V += Et;
+
+        // Map block segments for X and y
+        Xi = X.block(cnt, 0, kt, q);
+        yi = y.segment(cnt, kt);
+
+
+        Eigen::LDLT<Eigen::MatrixXd> ldlt(V);
+        if(ldlt.info() == Eigen::Success)
         {
-            XVX += X(Eigen::seqN(cnt,kt),Eigen::all).transpose() * V.colPivHouseholderQr().solve(X(Eigen::seqN(cnt,kt),Eigen::all));
+            Eigen::MatrixXd VinvXi = ldlt.solve(Xi);
+            Eigen::VectorXd Vinvyi = ldlt.solve(yi);
+            
+            XVX.noalias() += Xi.transpose() * VinvXi;
+            XVy.noalias() += Xi.transpose() * Vinvyi;
         }
         else
         {
-            //Rcpp::Rcout << "Singular matrix - using pseudoinv" << "\n";
-            //Rcpp::Rcout << "idx = " << idx << " sjt= " << i << "\n";
-            //Rcpp::Rcout << "n0 = " << n << "; k0= " << k << "; t0=" << t << "\n";
-            V_inv[i] = V.completeOrthogonalDecomposition().pseudoInverse();
-            XVX += X(Eigen::seqN(cnt,kt),Eigen::all).transpose() * V_inv[i] * X(Eigen::seqN(cnt,kt),Eigen::all);
+            Eigen::MatrixXd V_inv = V.completeOrthogonalDecomposition().pseudoInverse();
+            XVX.noalias() += Xi.transpose() * (V_inv * Xi);
+            XVy.noalias() += Xi.transpose() * (V_inv * yi);
         }
         cnt += kt;
     }
-    Eigen::MatrixXd XVXinvXt;
-    Eigen::FullPivLU<Eigen::MatrixXd> lu(XVX);
-    bool v_inv2 = lu.isInvertible();
-    if(v_inv2)
+    // Final beta solve outside the loop
+    Eigen::LDLT<Eigen::MatrixXd> ldlt_XVX(XVX);
+    if(ldlt_XVX.info() == Eigen::Success)
     {
-        XVXinvXt = XVX.colPivHouseholderQr().solve(X.transpose());
+        beta = ldlt_XVX.solve(XVy);
     }
     else
     {
-        //Rcpp::Rcout << "Singular matrix - using pseudoinv" << "\n";
-        XVXinvXt = XVX.completeOrthogonalDecomposition().pseudoInverse() * X.transpose();
-    }
-    beta = Eigen::VectorXd::Zero(q);
-    cnt = 0;
-    for(int i=0;i<n;++i)
-    {
-        int kt = kt_vec(i);
-        if(v_inv[i])
-        {
-            Eigen::MatrixXd Zi = Z_assemble(Z,MAP,i,k,t,kt);
-            Eigen::MatrixXd V = (Zi * D * Zi.transpose() + Et_assemble(E, MAP, i, k, t, kt));
-            beta += XVXinvXt(Eigen::all,Eigen::seqN(cnt,kt)) * V.colPivHouseholderQr().solve(y(Eigen::seqN(cnt,kt)));
-        }
-        else
-        {
-            beta += XVXinvXt(Eigen::all,Eigen::seqN(cnt,kt)) * V_inv[i] * y(Eigen::seqN(cnt,kt));
-        }
-        cnt += kt;
+        beta = XVX.completeOrthogonalDecomposition().pseudoInverse() * XVy;
     }
 }
 
@@ -477,51 +528,34 @@ Eigen::VectorXd R_expand(const Eigen::VectorXd & R,
 
 Eigen::MatrixXd RtR(const Eigen::MatrixXd & R, const Eigen::MatrixXi & MAP)//const Eigen::MatrixXd & R, const Eigen::MatrixXi & MAP)
 {
-    int n = R.rows();
     int p = R.cols();
-    Eigen::MatrixXd cov = Eigen::MatrixXd::Zero(p,p);
-    //Eigen::ArrayXXd R_arr = R.array().pow(2).matrix();
 
+    // 1. Vectorized Square and Zero-Masking
+    Eigen::MatrixXd R_sq = (MAP.array() != 0).select(R.array().square().matrix(), 0.0);
+    Eigen::MatrixXd MAP_d = MAP.cast<double>();
+    
+    // 2. BLAS Matrix Multiplication (Instantaneous)
+    Eigen::MatrixXd N = MAP_d.transpose() * MAP_d;
+    Eigen::MatrixXd SumRsq = R_sq.transpose() * R_sq;
+    
+    Eigen::MatrixXd cov = Eigen::MatrixXd::Zero(p, p);
+
+    // 3. Fast Assembly
+    #pragma omp parallel for schedule(dynamic)
     for(int i=0; i < p; ++i)
     {
         for(int j=0; j <= i; ++j)
         {
-            double xmean = 0.0;
-            double ymean = 0.0;
-            int n_obs = 0;
-
-            for(int l=0; l < n; ++l)
+            if(N(i,j) > 0.0) // Protect against divide by zero
             {
-                if(MAP(l,i) != 0 && MAP(l,j) != 0)
+                double val = SumRsq(i, j) / N(i,j);
+                cov(i, j) = val;
+                if(i != j) 
                 {
-                    n_obs++;
-                    xmean += R(l,i);
-                    ymean += R(l,j);
+                    cov(j, i) = val;
                 }
-            }
-            if(n_obs == 0)
-            {
-                continue;
-            }
-            xmean = xmean / n_obs;
-            ymean = ymean / n_obs;
-            for(int l=0; l < n; ++l)
-            {
-                if(MAP(l,i) != 0 && MAP(l,j) != 0)
-                {
-                     /*cov(i,j) += (pow(R(l,i) - xmean,2) * pow(R(l,j) - ymean,2)) / double(n_obs);
-                    if(i != j)
-                    {
-                        cov(j,i) += (pow(R(l,i) - xmean,2) * pow(R(l,j) - ymean,2)) / double(n_obs);
-                    }*/
-                    cov(i,j) += (pow(R(l,i),2) * pow(R(l,j),2)) / double(n_obs);
-                    if(i != j)
-                    {
-                        cov(j,i) += (pow(R(l,i),2) * pow(R(l,j),2)) / double(n_obs);
-                    }
-                } 
             }
         }
     }
-    return(cov);
+    return cov;
 }
