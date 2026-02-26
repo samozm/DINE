@@ -85,12 +85,23 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// check_openmp
+bool check_openmp();
+RcppExport SEXP _DINE_check_openmp() {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    rcpp_result_gen = Rcpp::wrap(check_openmp());
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_DINE_estimate_all", (DL_FUNC) &_DINE_estimate_all, 9},
     {"_DINE_estimate_DEbeta", (DL_FUNC) &_DINE_estimate_DEbeta, 16},
     {"_DINE_covCalc", (DL_FUNC) &_DINE_covCalc, 3},
     {"_DINE_calc_ZDZ_plus_E_list", (DL_FUNC) &_DINE_calc_ZDZ_plus_E_list, 6},
+    {"_DINE_check_openmp", (DL_FUNC) &_DINE_check_openmp, 0},
     {NULL, NULL, 0}
 };
 

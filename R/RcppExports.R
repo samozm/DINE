@@ -17,3 +17,7 @@ calc_ZDZ_plus_E_list <- function(Z, D, E, n, k, t) {
     .Call('_DINE_calc_ZDZ_plus_E_list', PACKAGE = 'DINE', Z, D, E, n, k, t)
 }
 
+check_openmp <- function() {
+    .Call('_DINE_check_openmp', PACKAGE = 'DINE')
+}
+
