@@ -7,7 +7,7 @@ NULL
 #' Run DINE algorithm 1 or 2
 #' @param X fixed effect matrix - should be in order all times for node 1 for subject 1, all times for node 2 for subject 1, and so on
 #' @param y response vector - same order as X
-#' @param Z list of matrices - one random effect matrix per subject. should have form 
+#' @param Z list of matrices - one random effect matrix per subject. REMOVED FOR SPACE REASONS. should have form 
 #' [intercept time 1 0 ... ... 0] <- node 1
 #' [intercept time 2 0 ... ... 0] <- node 1
 #' [............................] <- node 1
@@ -59,9 +59,10 @@ estimate <- function(X,y,Z,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(10^
       custom_theta = T
     }
     # Pre-process the data ONCE in the main R thread
-    prep_data <- build_map_and_masterZ(Z_in, k, t)
+    prep_data <- build_map_and_masterZ(Z, k, t)
     masterZ <- prep_data$masterZ
     MAP <- prep_data$MAP
+    rm(Z);
 
     res <- estimate_DEbeta(X,y,masterZ,MAP,n0,k0,t0,threshold,max_itr,convergence_cutoff,REML,verbose,timings,n_fold=n_fold,custom_theta=custom_theta,n_threads=n_threads) 
     #a2.estimate_DEbeta(X,y,Z,n0,k0,t0,max_itr,covtype,idx)
