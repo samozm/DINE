@@ -180,22 +180,22 @@ void a2_thresholdRange(const Eigen::MatrixXd & R, Eigen::ArrayXXd& theta, Eigen:
     lower = (delta.array() <= 0.f).select(std::numeric_limits<int>::max(), delta).minCoeff();
 }
 
-void a2_threshold(const Eigen::MatrixXd& abscov, const Eigen::MatrixXd& signcov, 
-               const Eigen::MatrixXd& thetalambda, Eigen::MatrixXd& sigma_out)
+void a2_threshold(const Eigen::MatrixXd& abscov, const Eigen::MatrixXd& signcov, double lambda,
+               const Eigen::MatrixXd& theta, Eigen::MatrixXd& sigma_out)
 {
     int p = abscov.rows();
-    // Pre-calculate the diagonal threshold checks 
-    Eigen::VectorXd diag_diff = abscov.diagonal() - thetalambda.diagonal();
     
     // Loop through the matrix without allocating any temporary arrays
     for(int i = 0; i < p; ++i) 
     {
+        double diag_diff_i = abscov(i,i) - (theta(i,i) * lambda);
         for(int j = 0; j < p; ++j) 
         {
+            double diag_diff_i = abscov(i,i) - (theta(i,i) * lambda);
             // Apply the diagonal mask and threshold in one step
-            if (diag_diff(i) > 0.0 && diag_diff(j) > 0.0) 
+            if (diag_diff_i > 0.0 && diag_diff_j > 0.0) 
             {
-                double val = abscov(i, j) - thetalambda(i, j);
+                double val = abscov(i, j) - theta(i, j) * lambda;
                 sigma_out(i, j) = std::max(0.0, val) * signcov(i, j);
             } 
             else 
@@ -203,12 +203,7 @@ void a2_threshold(const Eigen::MatrixXd& abscov, const Eigen::MatrixXd& signcov,
                 sigma_out(i, j) = 0.0;
             }
         }
-    }
-    
-    // Guarantee exact non-negative diagonals
-    for(int i = 0; i < p; ++i) 
-    {
-        sigma_out(i, i) = std::max(0.0, diag_diff(i));
+        sigma_out(i, i) = std::max(0.0, diag_diff_i);
     }
 }
 
@@ -252,19 +247,29 @@ void a2_threshold_D(const Eigen::MatrixXd & R, Eigen::MatrixXd& sigma,
         double upper = 0.0; 
         a2_thresholdRange(R(not_val_idx,Eigen::all), thetaTrain, covTrain, MAP(not_val_idx,Eigen::all), lower, upper);
         covTest = covCalc(R(val_idx,Eigen::all),MAP(val_idx,Eigen::all));
+        std::vector<Eigen::MatrixXd> local_sigmas(nParam, Eigen::MatrixXd::Zero(p, p));
         #pragma omp parallel for
         for(int j=0;j<nParam;++j)
         {
-            Eigen::MatrixXd local_sigmaTrain=Eigen::MatrixXd::Zero(p,p);
-            a2_threshold(covTrain.cwiseAbs(),covTrain.cwiseSign(),params[j] * thetaTrain,local_sigmaTrain);
-            error(i,j) = (local_sigmaTrain - covTest).norm();
+            a2_threshold(covTrain.cwiseAbs(),covTrain.cwiseSign(),params[j],thetaTrain,local_sigmas[j]);
+            // Calculate the norm manually. (local_sigmas - covTest).norm() 
+            // forces Eigen to create a temporary matrix, which would crash R!
+            double sq_err = 0.0;
+            for(int r = 0; r < p; ++r) {
+                for(int c = 0; c < p; ++c) {
+                    double diff = local_sigmas[j](r,c) - covTest(r,c);
+                    sq_err += diff * diff;
+                }
+            }
+            error(i,j) = std::sqrt(sq_err);
         }
     }
     Eigen::Index minIndex;
     error.colwise().sum().minCoeff(&minIndex);
-    theta = params[minIndex] * theta;
+    //theta = params[minIndex] * theta;
 
-    a2_threshold(cov.cwiseAbs(),cov.cwiseSign(),theta,sigma);
+    a2_threshold(cov.cwiseAbs(),cov.cwiseSign(),params[minIndex],theta,sigma);
+    theta = params[minIndex] * theta;
 
 }
 
@@ -309,7 +314,7 @@ void estimate_D(const Eigen::MatrixXd & X, const Eigen::VectorXd & r0,
         Eigen::MatrixXd cov = covCalc(R, MAP);
         D.setZero(p,p);
         //TODO: sqrt log p/n??
-        a2_threshold(cov.cwiseAbs(),cov.cwiseSign(),theta,D);
+        a2_threshold(cov.cwiseAbs(),cov.cwiseSign(),1.0,theta,D);
     }
 
 
