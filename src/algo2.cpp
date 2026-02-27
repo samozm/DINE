@@ -173,11 +173,19 @@ void a2_thresholdRange(const Eigen::MatrixXd & R, Eigen::ArrayXXd& theta, Eigen:
     int p = R.cols();
     cov = covCalc(R,MAP);
 
-    theta = (RtR(R,MAP) - cov.array().square().matrix()).array().sqrt();
-    Eigen::MatrixXd delta = (cov.array() / theta).cwiseAbs().matrix();
+    // Prevent NaN from sqrt(negative floating point noise)
+    theta = (RtR(R, MAP) - cov.array().square().matrix()).array().max(0.0).sqrt();
+    
+    // The Subset Safety Net: Prevent Division by Zero!
+    Eigen::ArrayXXd safe_theta = (theta == 0.0).select(1e-8, theta);
+    Eigen::MatrixXd delta = (cov.array() / safe_theta).cwiseAbs().matrix();
     delta.diagonal() = Eigen::VectorXd::Zero(delta.rows());
     upper = delta.maxCoeff();
-    lower = (delta.array() <= 0.f).select(std::numeric_limits<int>::max(), delta).minCoeff();
+    // Fallback in case all delta values are 0 (perfect sparsity)
+    lower = (delta.array() <= 0.0).select(std::numeric_limits<double>::max(), delta).minCoeff();
+    if (lower == std::numeric_limits<double>::max()) {
+        lower = 0.0; 
+    }
 }
 
 void a2_threshold(const Eigen::MatrixXd& abscov, const Eigen::MatrixXd& signcov, double lambda,
@@ -215,6 +223,19 @@ void a2_threshold_D(const Eigen::MatrixXd & R, Eigen::MatrixXd& sigma,
 
     int n = R.rows();
     int p = R.cols();
+
+    // Dynamic Fold Adjustment for Subsets
+    int actual_folds = std::min(n_fold, n);
+    
+    // Bailing out safely if the subset is extremely small (1 subject)
+    if (actual_folds < 2) {
+        Eigen::MatrixXd cov = covCalc(R, MAP);
+        Eigen::MatrixXd covAbs = cov.cwiseAbs();
+        Eigen::MatrixXd covSign = cov.cwiseSign();
+        a2_threshold(covAbs, covSign, 1.0, theta, sigma);
+        return; 
+    }
+
     int nParam = 100;
     Eigen::MatrixXd cov(p,p);
     double lower = 0.0;
@@ -226,9 +247,11 @@ void a2_threshold_D(const Eigen::MatrixXd & R, Eigen::MatrixXd& sigma,
     double jump = (upper - lower)/double(nParam);
     double ctr = lower;
     std::generate(params.begin(), params.end(), [&ctr,&jump]{ return ctr+=jump;});
+    
     std::vector<int> part(n);
     std::iota(part.begin(), part.end(), 0);
     std::shuffle(part.begin(),part.end(), rng);
+
     Eigen::MatrixXd error(n_fold,nParam);
     Eigen::MatrixXd covTest;
     Eigen::MatrixXd covTrain(p,p);
@@ -236,9 +259,9 @@ void a2_threshold_D(const Eigen::MatrixXd & R, Eigen::MatrixXd& sigma,
 
     for (int i=0;i<part.size();++i)
     {
-        part[i] = part[i] % n_fold;
+        part[i] = part[i] % actual_folds;
     }
-    for (int i=0;i<n_fold; ++i)
+    for (int i=0;i<actual_folds; ++i)
     {
         std::vector<int> val_idx;
         std::vector<int> not_val_idx;
@@ -270,8 +293,8 @@ void a2_threshold_D(const Eigen::MatrixXd & R, Eigen::MatrixXd& sigma,
     error.colwise().sum().minCoeff(&minIndex);
     //theta = params[minIndex] * theta;
 
-    Eigen::MatrixXd covAbs = covTrain.cwiseAbs();
-    Eigen::MatrixXd covSign = covTrain.cwiseSign();
+    Eigen::MatrixXd covAbs = cov.cwiseAbs();
+    Eigen::MatrixXd covSign = cov.cwiseSign();
     a2_threshold(covAbs,covSign,params[minIndex],theta,sigma);
     theta = params[minIndex] * theta;
 
