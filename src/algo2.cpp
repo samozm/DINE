@@ -191,7 +191,7 @@ void a2_threshold(const Eigen::MatrixXd& abscov, const Eigen::MatrixXd& signcov,
         double diag_diff_i = abscov(i,i) - (theta(i,i) * lambda);
         for(int j = 0; j < p; ++j) 
         {
-            double diag_diff_i = abscov(i,i) - (theta(i,i) * lambda);
+            double diag_diff_j = abscov(j,j) - (theta(j,j) * lambda);
             // Apply the diagonal mask and threshold in one step
             if (diag_diff_i > 0.0 && diag_diff_j > 0.0) 
             {
