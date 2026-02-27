@@ -1,5 +1,5 @@
 #' @export
-estimate <- function(X,y,Z,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(10^(-5)),REML=FALSE,verbose=FALSE,timings=FALSE,n_fold=5,,n_threads=1,threshold=NA)
+estimate <- function(X,y,Z,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(10^(-5)),REML=FALSE,verbose=FALSE,timings=FALSE,n_fold=5,n_threads=1,threshold=NA)
 {
   startTime <- proc.time()
   nkt = 0
