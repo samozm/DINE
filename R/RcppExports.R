@@ -5,8 +5,47 @@ estimate_all <- function(X, y, Z_in, n, k, t, max_itr = 250L, convergence_cutoff
     .Call('_DINE_estimate_all', PACKAGE = 'DINE', X, y, Z_in, n, k, t, max_itr, convergence_cutoff, REML)
 }
 
-estimate_DEbeta <- function(X, y, Z_in, n, k, t, theta, max_itr = 250L, convergence_cutoff = 0.0001, REML = FALSE, verbose = FALSE, timings = FALSE, n_fold = 5L, custom_theta = FALSE, n_threads = 1L, seed = 1234L) {
-    .Call('_DINE_estimate_DEbeta', PACKAGE = 'DINE', X, y, Z_in, n, k, t, theta, max_itr, convergence_cutoff, REML, verbose, timings, n_fold, custom_theta, n_threads, seed)
+#' Estimate Covariance Matrices and Fixed Effects (C++ Backend)
+#'
+#' @description A high-performance, OpenMP-enabled C++ backend for iteratively estimating 
+#' fixed effects (\code{beta}), random effect covariance (\code{D}), and residual variance (\code{E}) 
+#' using block-coordinate descent and cross-validated thresholding.
+#'
+#' @param X Numeric matrix of fixed effect covariates.
+#' @param y Numeric vector of the continuous response variable.
+#' @param masterZ Master random effect matrix containing all timepoints used by any subject
+#' @param MAP Integer matrix, n x kt describing which node/timepoint combinations each subject has
+#' @param n Integer. Number of subjects.
+#' @param k Integer. Number of nodes or spatial features.
+#' @param t Integer. Number of time points per subject.
+#' @param theta Numeric matrix. Initial thresholding parameters for cross-validation.
+#' @param max_itr Integer. Maximum number of block-coordinate descent iterations. Default is 250.
+#' @param convergence_cutoff Numeric. Change in error required to declare convergence. Default is 0.0001.
+#' @param REML Logical. If TRUE, uses Restricted Maximum Likelihood for variance estimation. Default is FALSE.
+#' @param verbose Logical. If TRUE, prints iteration-level errors and matrix updates to the console. Default is FALSE.
+#' @param timings Logical. If TRUE, prints millisecond timings for internal C++ functions. Default is FALSE.
+#' @param n_fold Integer. Number of folds for the internal cross-validation step. Default is 5.
+#' @param custom_theta Logical. If TRUE, bypasses cross-validation and uses the user-provided \code{theta}. Default is FALSE.
+#' @param n_threads Integer. Number of OpenMP threads to use. Set to 1 if parallelizing at the R level. Default is 1.
+#' @param seed Integer. Random seed for ensuring reproducible cross-validation splits. Default is 1234.
+#' 
+#' @return A named list containing:
+#' \itemize{
+#'   \item \code{Sigma}: The final composite covariance matrix.
+#'   \item \code{E}: The diagonal residual variance matrix.
+#'   \item \code{D}: The thresholded random effects covariance matrix.
+#'   \item \code{Lambda_E}: The standard deviation vector of the residuals.
+#'   \item \code{beta}: The final fixed-effects coefficient vector.
+#'   \item \code{n_iter}: The total number of iterations run.
+#'   \item \code{all_err}: Vector of convergence errors across all iterations.
+#'   \item \code{converged}: Logical indicating if the algorithm reached \code{convergence_cutoff} before \code{max_itr}.
+#'   \item \code{sigma}: The estimated scaling variance parameter.
+#'   \item \code{threshold}: The final threshold matrix selected by cross-validation.
+#' }
+#'
+#' @export
+estimate_DEbeta <- function(X, y, masterZ, MAP, n, k, t, theta, max_itr = 250L, convergence_cutoff = 0.0001, REML = FALSE, verbose = FALSE, timings = FALSE, n_fold = 5L, custom_theta = FALSE, n_threads = 1L, seed = 1234L) {
+    .Call('_DINE_estimate_DEbeta', PACKAGE = 'DINE', X, y, masterZ, MAP, n, k, t, theta, max_itr, convergence_cutoff, REML, verbose, timings, n_fold, custom_theta, n_threads, seed)
 }
 
 covCalc <- function(X, MAP, print) {

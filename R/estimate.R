@@ -1,4 +1,45 @@
-#' @export
+#' @useDynLib DINE, .registration = TRUE
+#' @importFrom Rcpp sourceCpp
+#' @importFrom Rcpp evalCpp
+NULL
+
+
+#' Run DINE algorithm 1 or 2
+#' @param X fixed effect matrix - should be in order all times for node 1 for subject 1, all times for node 2 for subject 1, and so on
+#' @param y response vector - same order as X
+#' @param Z list of matrices - one random effect matrix per subject. should have form 
+#' [intercept time 1 0 ... ... 0] <- node 1
+#' [intercept time 2 0 ... ... 0] <- node 1
+#' [............................] <- node 1
+#' [0 0 intercept time 1 0 ... 0] <- node 2
+#' @param n0 Integer. total number of subjects
+#' @param k0 Integer. total number of nodes 
+#' @param t0 Integer. total number of timepoints
+#' @param algo (optional) default value 2. 1 or 2. which algorithm to run
+#' @param max_itr (optional) Integer. default value 100 Integer. maximum number of iterations to run the algorithms
+#' @param convergence_cutoff (optional) default value 5*10^-5. Double. relative difference in parameters used to determine algorithm convergence
+#' @param REML (optional) Boolean. default value FALSE. Boolean. whether or not to use restricted ML for fitting in algorithm 2
+#' @param verbose (optional) Boolean. default value FALSE. Boolean. For algo 2, prints current and previous D, E, and beta values at each iteration
+#' @param timings (optional) Boolean. default value FALSE. Boolean. Whether or not to print the time each fitting takes for each iteration
+#' @param n_fold (optional) Integer. default value 5 Integer. Number of cross-validation fits to use to fit lambda for algorithm 2
+#' @param n_threads (optional) Integer. default value 1 Integer. Number of threads to use for loops. Set to 1 if you're running estimate in parallel already
+#' @param threshold (optional) Matrix. default value NA Matrix of pre-computed thresholds to use for fitting D
+#' @return A named list containing: 
+#' \itemize{
+#'   \item \code{E}: The diagonal residual variance matrix.
+#'   \item \code{D}: The thresholded random effects covariance matrix.
+#'   \item \code{V}: The final composite covariance matrix.
+#'   \item \code{beta}: The final fixed-effects coefficient vector.
+#'   \item \code{timelength}: The amount of time the algorithm took to run
+#'   \item \code{converged}: Logical indicating if the algorithm reached \code{convergence_cutoff} before \code{max_itr}.
+#'   \item \code{sigma}: The estimated scaling variance parameter for algorithm 2. NA for algorithm 1
+#'   \item \code{n_iter}: The total number of iterations run.
+#'   \item \code{all_err}: Vector of convergence errors across all iterations.
+#'   \item \code{MAP}: Integer matrix, n x kt describing which node/timepoint combinations each subject has
+#'   \item \code{V_nonzeros_pct}: For algorithm 1, percentage of cells in the overall covariance V matrix that are zeros. NA for algorithm 2
+#'   \item \code{threshold}: The final threshold matrix selected by cross-validation for algoritm 2. NA for algorithm 1.
+#' }
+#' @export  
 estimate <- function(X,y,Z,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(10^(-5)),REML=FALSE,verbose=FALSE,timings=FALSE,n_fold=5,n_threads=1,threshold=NA)
 {
   startTime <- proc.time()
@@ -17,7 +58,12 @@ estimate <- function(X,y,Z,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(10^
     } else {
       custom_theta = T
     }
-    res <- estimate_DEbeta(X,y,Z,n0,k0,t0,threshold,max_itr,convergence_cutoff,REML,verbose,timings,n_fold=n_fold,custom_theta=custom_theta,n_threads=n_threads) 
+    # Pre-process the data ONCE in the main R thread
+    prep_data <- build_map_and_masterZ(Z_in, k, t)
+    masterZ <- prep_data$masterZ
+    MAP <- prep_data$MAP
+
+    res <- estimate_DEbeta(X,y,masterZ,MAP,n0,k0,t0,threshold,max_itr,convergence_cutoff,REML,verbose,timings,n_fold=n_fold,custom_theta=custom_theta,n_threads=n_threads) 
     #a2.estimate_DEbeta(X,y,Z,n0,k0,t0,max_itr,covtype,idx)
     sigma <- res$sigma
   }
@@ -35,5 +81,120 @@ estimate <- function(X,y,Z,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(10^
               converged=res$converged,sigma=sigma,n_iter=res$n_iter,
               all_err=res$all_err,MAP=res$MAP,
               V_nonzeros_pct=V_nonzeros_pct,
+              threshold=threshold))#,Sigma=V))
+}
+
+
+#' @export
+estimate_masterZ <- function(X,y,masterZ,MAP,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(10^(-5)),REML=FALSE,verbose=FALSE,timings=FALSE,n_fold=5,n_threads=1,threshold=NA)
+{
+  startTime <- proc.time()
+  nkt = 0
+  for(i in 1:length(Z))
+  {
+    nkt = nkt + dim(Z[i])[1]
+  }
+  V_nonzeros_pct = 0
+  if(algo==2)
+  {  
+    custom_theta = F
+    if(sum(is.na(threshold)) > 0)
+    {
+      threshold = matrix(0,2*k0,2*k0)
+    } else {
+      custom_theta = T
+    }
+    # Pre-process the data ONCE in the main R thread
+    prep_data <- build_map_and_masterZ(Z_in, k, t)
+    masterZ <- prep_data$masterZ
+    MAP <- prep_data$MAP
+
+    # You can now delete Z_in from R's memory if you want to save RAM!
+    rm(Z_in)
+    gc()
+    res <- estimate_DEbeta(X,y,masterZ,MAP,n0,k0,t0,threshold,max_itr,convergence_cutoff,REML,verbose,timings,n_fold=n_fold,custom_theta=custom_theta,n_threads=n_threads) 
+    #a2.estimate_DEbeta(X,y,Z,n0,k0,t0,max_itr,covtype,idx)
+    sigma <- res$sigma
+  }
+  else if(algo==1)
+  {
+    print("not implemented for algo 1 yet")
+  }
+  
+  exeTimeClass <- proc.time() - startTime
+  exeTime <- as.numeric(exeTimeClass[3])
+  timelength <- exeTime
+  return(list(E=res$E,D=res$D,V=res$Sigma,beta=res$beta,time=timelength,
+              converged=res$converged,sigma=sigma,n_iter=res$n_iter,
+              all_err=res$all_err,MAP=res$MAP,
+              V_nonzeros_pct=V_nonzeros_pct,
               threshold=res$threshold))#,Sigma=V))
+}
+
+#' Build MAP and masterZ matrices for DINE
+#' 
+#' @param Z_in List of N matrices, each with 2*K columns.
+#' @param k Integer. Number of nodes.
+#' @param t Integer. Number of time points.
+#' @return A list containing the masterZ matrix and the MAP matrix.
+#' @export
+build_map_and_masterZ <- function(Z_in, k, t) {
+  n <- length(Z_in)
+  
+  # 1. Extract all valid times across all subjects and nodes
+  all_times <- unlist(lapply(Z_in, function(Zi) {
+    valid_times <- unlist(lapply(1:k, function(l) {
+      indicator <- Zi[, 2 * l - 1] # R uses 1-based indexing
+      time_col  <- Zi[, 2 * l]
+      # Return times where indicator is approximately 1
+      time_col[abs(indicator - 1) < 1e-6]
+    }))
+    return(valid_times)
+  }))
+  
+  # Get unique, sorted times
+  times <- sort(unique(all_times))
+  
+  if (length(times) != t) {
+    warning(sprintf("Expected %d unique times, but found %d.", t, length(times)))
+    t <- length(times)
+  }
+  
+  # 2. Build masterZ (size: k*t by 2k)
+  masterZ <- matrix(0.0, nrow = k * t, ncol = 2 * k)
+  for (l in 1:k) {
+    row_seq <- ((l - 1) * t + 1):(l * t)
+    masterZ[row_seq, 2 * l - 1] <- 1.0
+    masterZ[row_seq, 2 * l]     <- times
+  }
+  
+  # 3. Build MAP (size: n by k*t)
+  MAP <- matrix(0L, nrow = n, ncol = k * t)
+  
+  for (i in 1:n) {
+    Zi <- Z_in[[i]]
+    for (l in 1:k) {
+      indicator <- Zi[, 2 * l - 1]
+      time_col  <- Zi[, 2 * l]
+      
+      # Vectorized check for time = 0 and indicator = 1
+      zero_match <- abs(time_col) < 1e-6 & abs(indicator - 1) < 1e-6
+      
+      for (j in 1:t) {
+        current_time <- times[j]
+        
+        if (abs(current_time) < 1e-6) {
+          if (any(zero_match)) {
+            MAP[i, (l - 1) * t + j] <- 1L
+          }
+        } else {
+          if (any(abs(time_col - current_time) < 1e-6)) {
+            MAP[i, (l - 1) * t + j] <- 1L
+          }
+        }
+      }
+    }
+  }
+  
+  return(list(masterZ = masterZ, MAP = MAP))
 }

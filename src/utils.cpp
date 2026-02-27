@@ -219,6 +219,7 @@ void find_all(const Eigen::VectorXi & vec, const int & val, std::vector<int> & o
     }
 }
 
+//vestigial, TODO: still used in algo 1 - gotta fix that
 int make_MAP(const std::vector<Eigen::MatrixXd>& Z, 
              Eigen::MatrixXd & masterZ,
              Eigen::MatrixXi & MAP, Eigen::VectorXd & r0,
@@ -276,41 +277,37 @@ Eigen::MatrixXd Et_assemble(const Eigen::VectorXd & E,
                             const Eigen::MatrixXi & MAP, 
                             int i, int k, int t, int kt)
 {
-  Eigen::MatrixXd Et = Eigen::MatrixXd::Zero(kt,kt);
-  int cnt = 0;
-  int cnt2 = 0;
-  for(int j = 0; j < k; ++j)
-  {
-    for(int l = 0; l < t; ++l)
+    Eigen::MatrixXd Et = Eigen::MatrixXd::Zero(kt,kt);
+    int cnt = 0;
+    int cnt2 = 0;
+    for(int j = 0; j < k; ++j)
     {
-      if(MAP(i,cnt2) == 1)
-      {
-        Et(cnt,cnt) = E(j);
-        cnt++;
-      }
-      cnt2++;
+        for(int l = 0; l < t; ++l)
+        {
+        if(MAP(i,cnt2) == 1)
+        {
+            Et.diagonal()(cnt) = E(j);
+            cnt++;
+        }
+        cnt2++;
+        }
     }
-  }
   return(Et);
 }
 
+//[[Rcpp::export]]
 Eigen::MatrixXd Z_assemble(const Eigen::MatrixXd & masterZ, 
                            const Eigen::MatrixXi & MAP,
                            int i, int k, int t, int kt)
 {
     Eigen::MatrixXd Z_out = Eigen::MatrixXd::Zero(kt,2*k);
     int cnt = 0;
-    int cnt2 = 0;
-    for(int j = 0; j<k; ++j)
+    for(int j = 0; j<k*t; ++j)
     {
-        for(int l = 0; l < t; ++l)
+        if(MAP(i,j) == 1)
         {
-            if(MAP(i,cnt2) == 1)
-            {
-                Z_out(cnt,Eigen::all) = masterZ(cnt2,Eigen::all);
-                cnt++;
-            }
-            cnt2++;
+            Z_out.row(cnt).noalias() = masterZ.row(j);
+            cnt++;
         }
     }
     return(Z_out);
