@@ -43,11 +43,6 @@ NULL
 estimate <- function(X,y,Z,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(10^(-5)),REML=FALSE,verbose=FALSE,timings=FALSE,n_fold=5,n_threads=1,threshold=NA)
 {
   startTime <- proc.time()
-  nkt = 0
-  for(i in 1:length(Z))
-  {
-    nkt = nkt + dim(Z[i])[1]
-  }
   V_nonzeros_pct = 0
   if(algo==2)
   {  
@@ -122,11 +117,6 @@ estimate <- function(X,y,Z,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(10^
 estimate_masterZ <- function(X,y,masterZ,MAP,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(10^(-5)),REML=FALSE,verbose=FALSE,timings=FALSE,n_fold=5,n_threads=1,threshold=NA)
 {
   startTime <- proc.time()
-  nkt = 0
-  for(i in 1:length(Z))
-  {
-    nkt = nkt + dim(Z[i])[1]
-  }
   V_nonzeros_pct = 0
   if(algo==2)
   {  
@@ -137,14 +127,6 @@ estimate_masterZ <- function(X,y,masterZ,MAP,n0,k0,t0,algo=2,max_itr=200,converg
     } else {
       custom_theta = T
     }
-    # Pre-process the data ONCE in the main R thread
-    prep_data <- build_map_and_masterZ(Z_in, k, t)
-    masterZ <- prep_data$masterZ
-    MAP <- prep_data$MAP
-
-    # You can now delete Z_in from R's memory if you want to save RAM!
-    rm(Z_in)
-    gc()
     res <- estimate_DEbeta(X,y,masterZ,MAP,n0,k0,t0,threshold,max_itr,convergence_cutoff,REML,verbose,timings,n_fold=n_fold,custom_theta=custom_theta,n_threads=n_threads) 
     #a2.estimate_DEbeta(X,y,Z,n0,k0,t0,max_itr,covtype,idx)
     sigma <- res$sigma
