@@ -52,6 +52,10 @@ covCalc <- function(X, MAP, print) {
     .Call('_DINE_covCalc', PACKAGE = 'DINE', X, MAP, print)
 }
 
+Z_assemble <- function(masterZ, MAP, i, k, t, kt) {
+    .Call('_DINE_Z_assemble', PACKAGE = 'DINE', masterZ, MAP, i, k, t, kt)
+}
+
 calc_ZDZ_plus_E_list <- function(Z, D, E, n, k, t) {
     .Call('_DINE_calc_ZDZ_plus_E_list', PACKAGE = 'DINE', Z, D, E, n, k, t)
 }

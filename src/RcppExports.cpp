@@ -70,6 +70,22 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// Z_assemble
+Eigen::MatrixXd Z_assemble(const Eigen::MatrixXd& masterZ, const Eigen::MatrixXi& MAP, int i, int k, int t, int kt);
+RcppExport SEXP _DINE_Z_assemble(SEXP masterZSEXP, SEXP MAPSEXP, SEXP iSEXP, SEXP kSEXP, SEXP tSEXP, SEXP ktSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type masterZ(masterZSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXi& >::type MAP(MAPSEXP);
+    Rcpp::traits::input_parameter< int >::type i(iSEXP);
+    Rcpp::traits::input_parameter< int >::type k(kSEXP);
+    Rcpp::traits::input_parameter< int >::type t(tSEXP);
+    Rcpp::traits::input_parameter< int >::type kt(ktSEXP);
+    rcpp_result_gen = Rcpp::wrap(Z_assemble(masterZ, MAP, i, k, t, kt));
+    return rcpp_result_gen;
+END_RCPP
+}
 // calc_ZDZ_plus_E_list
 Rcpp::List calc_ZDZ_plus_E_list(const std::vector<Eigen::MatrixXd>& Z, const Eigen::MatrixXd& D, const Eigen::VectorXd& E, int n, int k, int t);
 RcppExport SEXP _DINE_calc_ZDZ_plus_E_list(SEXP ZSEXP, SEXP DSEXP, SEXP ESEXP, SEXP nSEXP, SEXP kSEXP, SEXP tSEXP) {
@@ -101,6 +117,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_DINE_estimate_all", (DL_FUNC) &_DINE_estimate_all, 9},
     {"_DINE_estimate_DEbeta", (DL_FUNC) &_DINE_estimate_DEbeta, 17},
     {"_DINE_covCalc", (DL_FUNC) &_DINE_covCalc, 3},
+    {"_DINE_Z_assemble", (DL_FUNC) &_DINE_Z_assemble, 6},
     {"_DINE_calc_ZDZ_plus_E_list", (DL_FUNC) &_DINE_calc_ZDZ_plus_E_list, 6},
     {"_DINE_check_openmp", (DL_FUNC) &_DINE_check_openmp, 0},
     {NULL, NULL, 0}

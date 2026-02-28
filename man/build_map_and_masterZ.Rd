@@ -4,17 +4,13 @@
 \alias{build_map_and_masterZ}
 \title{Build MAP and masterZ matrices for DINE}
 \usage{
-build_map_and_masterZ(Z_in, k, t)
+build_map_and_masterZ(Z_in)
 }
 \arguments{
 \item{Z_in}{List of N matrices, each with 2*K columns.}
-
-\item{k}{Integer. Number of nodes.}
-
-\item{t}{Integer. Number of time points.}
 }
 \value{
-A list containing the masterZ matrix and the MAP matrix.
+A list containing the masterZ matrix and the MAP matrix, k (number of nodes) and t (number of timepoints).
 }
 \description{
 Build MAP and masterZ matrices for DINE
