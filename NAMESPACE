@@ -1,4 +1,6 @@
 useDynLib(DINE)
 importFrom(Rcpp, evalCpp)
 export("estimate")
+export("estimate_masterZ")
 export("calc_ZDZ_plus_E_list")
+export("build_map_and_masterZ")
