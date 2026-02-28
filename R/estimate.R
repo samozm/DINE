@@ -51,6 +51,13 @@ estimate <- function(X,y,Z,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(10^
   V_nonzeros_pct = 0
   if(algo==2)
   {  
+    prep_data <- build_map_and_masterZ(Z)
+    masterZ <- prep_data$masterZ
+    MAP <- prep_data$MAP
+    k0 <- prep_data$k 
+    t0 <- prep_data$t
+    rm(Z);
+
     custom_theta = F
     if(sum(is.na(threshold)) > 0)
     {
@@ -58,11 +65,6 @@ estimate <- function(X,y,Z,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(10^
     } else {
       custom_theta = T
     }
-    # Pre-process the data ONCE in the main R thread
-    prep_data <- build_map_and_masterZ(Z, k, t)
-    masterZ <- prep_data$masterZ
-    MAP <- prep_data$MAP
-    rm(Z);
 
     res <- estimate_DEbeta(X,y,masterZ,MAP,n0,k0,t0,threshold,max_itr,convergence_cutoff,REML,verbose,timings,n_fold=n_fold,custom_theta=custom_theta,n_threads=n_threads) 
     #a2.estimate_DEbeta(X,y,Z,n0,k0,t0,max_itr,covtype,idx)
@@ -165,12 +167,11 @@ estimate_masterZ <- function(X,y,masterZ,MAP,n0,k0,t0,algo=2,max_itr=200,converg
 #' Build MAP and masterZ matrices for DINE
 #' 
 #' @param Z_in List of N matrices, each with 2*K columns.
-#' @param k Integer. Number of nodes.
-#' @param t Integer. Number of time points.
-#' @return A list containing the masterZ matrix and the MAP matrix.
+#' @return A list containing the masterZ matrix and the MAP matrix, k (number of nodes) and t (number of timepoints).
 #' @export
-build_map_and_masterZ <- function(Z_in, k, t) {
+build_map_and_masterZ <- function(Z_in) {
   n <- length(Z_in)
+  k <- ncol(Z_in[[1]]) / 2
   
   # 1. Extract all valid times across all subjects and nodes
   all_times <- unlist(lapply(Z_in, function(Zi) {
@@ -185,6 +186,7 @@ build_map_and_masterZ <- function(Z_in, k, t) {
   
   # Get unique, sorted times
   times <- sort(unique(all_times))
+  t <- length(times)
   
   if (length(times) != t) {
     warning(sprintf("Expected %d unique times, but found %d.", t, length(times)))
@@ -227,5 +229,5 @@ build_map_and_masterZ <- function(Z_in, k, t) {
     }
   }
   
-  return(list(masterZ = masterZ, MAP = MAP))
+  return(list(masterZ = masterZ, MAP = MAP, k=k, t=t))
 }
