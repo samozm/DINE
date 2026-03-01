@@ -423,18 +423,22 @@ int a2_initial_estimates(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
     int p = X.cols();
     int q = 2*k; 
     Eigen::MatrixXd XtX = X.transpose() * X;
-    Eigen::MatrixXd XtXinvXt = (XtX).ldlt().solve(X.transpose());
-    beta = XtXinvXt * y;
+    Eigen::VectorXd Xty = X.transpose() * y;
+    beta = XtX.ldlt().solve(Xty);
     r = y - X * beta;
     Eigen::MatrixXd R(n,k*t);
     int nkt = 0;
     for(int i = 0; i<n; ++i)
     {
-        std::vector<int> idxs;
-        std::vector<int> waste;
-        int kt0 = MAP.rowwise().sum()(i);
-        find_all(MAP(i,Eigen::all),1,idxs,waste);
-        R(i,idxs) = r.segment(nkt,kt0);
+        int kt0 = 0; // Tracks how many valid nodes this specific subject has
+        for(int j = 0; j < k*t; ++j)
+        {
+            if(MAP(i, j) == 1)
+            {
+                R(i, j) = r(nkt + kt0);
+                kt0++;
+            }
+        }
         nkt += kt0;
     }
     Eigen::MatrixXd cov_int = covCalc(R, MAP);
