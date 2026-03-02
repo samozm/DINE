@@ -2,7 +2,7 @@
 # Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 estimate_all <- function(X, y, Z_in, n, k, t, max_itr = 250L, convergence_cutoff = 0.00005, REML = FALSE) {
-    .Call('_DINE_estimate_all', PACKAGE = 'DINE', X, y, Z_in, n, k, t, max_itr, convergence_cutoff, REML)
+    .Call(`_DINE_estimate_all`, X, y, Z_in, n, k, t, max_itr, convergence_cutoff, REML)
 }
 
 #' Estimate Covariance Matrices and Fixed Effects (C++ Backend)
@@ -45,22 +45,22 @@ estimate_all <- function(X, y, Z_in, n, k, t, max_itr = 250L, convergence_cutoff
 #'
 #' @export
 estimate_DEbeta <- function(X, y, masterZ, MAP, n, k, t, theta, max_itr = 250L, convergence_cutoff = 0.0001, REML = FALSE, verbose = FALSE, timings = FALSE, n_fold = 5L, custom_theta = FALSE, n_threads = 1L, seed = 1234L) {
-    .Call('_DINE_estimate_DEbeta', PACKAGE = 'DINE', X, y, masterZ, MAP, n, k, t, theta, max_itr, convergence_cutoff, REML, verbose, timings, n_fold, custom_theta, n_threads, seed)
+    .Call(`_DINE_estimate_DEbeta`, X, y, masterZ, MAP, n, k, t, theta, max_itr, convergence_cutoff, REML, verbose, timings, n_fold, custom_theta, n_threads, seed)
 }
 
 covCalc <- function(X, MAP, print) {
-    .Call('_DINE_covCalc', PACKAGE = 'DINE', X, MAP, print)
+    .Call(`_DINE_covCalc`, X, MAP, print)
 }
 
 Z_assemble <- function(masterZ, MAP, i, k, t, kt) {
-    .Call('_DINE_Z_assemble', PACKAGE = 'DINE', masterZ, MAP, i, k, t, kt)
+    .Call(`_DINE_Z_assemble`, masterZ, MAP, i, k, t, kt)
 }
 
 calc_ZDZ_plus_E_list <- function(Z, D, E, n, k, t) {
-    .Call('_DINE_calc_ZDZ_plus_E_list', PACKAGE = 'DINE', Z, D, E, n, k, t)
+    .Call(`_DINE_calc_ZDZ_plus_E_list`, Z, D, E, n, k, t)
 }
 
 check_openmp <- function() {
-    .Call('_DINE_check_openmp', PACKAGE = 'DINE')
+    .Call(`_DINE_check_openmp`)
 }
 

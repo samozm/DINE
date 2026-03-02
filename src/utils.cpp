@@ -100,7 +100,7 @@ Eigen::MatrixXd covCalc(const Eigen::MatrixXd & X)
 }
 
 // [[Rcpp::export]]
-Eigen::MatrixXd covCalc(const Eigen::MatrixXd & X, const Eigen::MatrixXi & MAP, bool print = false)
+Eigen::MatrixXd covCalc(const Eigen::MatrixXd & X, const Eigen::MatrixXi & MAP, bool print)
 {
     int n = X.rows();
     int p = X.cols();

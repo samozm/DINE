@@ -31,15 +31,15 @@ BEGIN_RCPP
 END_RCPP
 }
 // estimate_DEbeta
-Rcpp::List estimate_DEbeta(const Eigen::MatrixXd& X, const Eigen::VectorXd& y, const Eigen::MatrixXd& masterZ, const Eigen::MatrixXi& MAP, int n, int k, int t, Eigen::ArrayXXd theta, int max_itr, double convergence_cutoff, bool REML, bool verbose, bool timings, int n_fold, bool custom_theta, int n_threads, int seed);
+Rcpp::List estimate_DEbeta(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Eigen::VectorXd> y, const Eigen::Map<Eigen::MatrixXd> masterZ, const Eigen::Map<Eigen::MatrixXi> MAP, int n, int k, int t, Eigen::ArrayXXd theta, int max_itr, double convergence_cutoff, bool REML, bool verbose, bool timings, int n_fold, bool custom_theta, int n_threads, int seed);
 RcppExport SEXP _DINE_estimate_DEbeta(SEXP XSEXP, SEXP ySEXP, SEXP masterZSEXP, SEXP MAPSEXP, SEXP nSEXP, SEXP kSEXP, SEXP tSEXP, SEXP thetaSEXP, SEXP max_itrSEXP, SEXP convergence_cutoffSEXP, SEXP REMLSEXP, SEXP verboseSEXP, SEXP timingsSEXP, SEXP n_foldSEXP, SEXP custom_thetaSEXP, SEXP n_threadsSEXP, SEXP seedSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type X(XSEXP);
-    Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type y(ySEXP);
-    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type masterZ(masterZSEXP);
-    Rcpp::traits::input_parameter< const Eigen::MatrixXi& >::type MAP(MAPSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXd> >::type masterZ(masterZSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXi> >::type MAP(MAPSEXP);
     Rcpp::traits::input_parameter< int >::type n(nSEXP);
     Rcpp::traits::input_parameter< int >::type k(kSEXP);
     Rcpp::traits::input_parameter< int >::type t(tSEXP);

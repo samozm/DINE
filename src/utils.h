@@ -63,11 +63,13 @@ void estimate_beta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
                    const std::vector<Eigen::MatrixXd> & V, Eigen::VectorXd & beta,
                    int n, int k, int t);
 
-void estimate_beta2(const Eigen::MatrixXd & X, const Eigen::VectorXd & y, 
-                    const Eigen::MatrixXd & Z,
-                    const Eigen::MatrixXd & D,
-                    const Eigen::VectorXd & E,
-                    const Eigen::VectorXi kt_vec, const Eigen::MatrixXi & MAP,
+void estimate_beta2(const Eigen::Ref<const Eigen::MatrixXd> & X, 
+                    const Eigen::Ref<const Eigen::VectorXd> & y, 
+                    const Eigen::Ref<const Eigen::MatrixXd> & Z,
+                    const Eigen::Ref<const Eigen::MatrixXd> & D,
+                    const Eigen::Ref<const Eigen::VectorXd> & E,
+                    const Eigen::VectorXi & kt_vec, 
+                    const Eigen::Ref<const Eigen::MatrixXi> & MAP,
                     Eigen::VectorXd & beta,
                     int n, int k, int t);
 
@@ -75,19 +77,19 @@ Eigen::MatrixXd Et_assemble(const Eigen::VectorXd & E,
                             const Eigen::MatrixXi & MAP, 
                             int i, int k, int t, int kt);
 
-void Et_assemble_IP(const Eigen::VectorXd & E, 
-                       Eigen::MatrixXd & Et,
-                 const Eigen::MatrixXi & MAP, 
-                 int i, int k, int t, int kt);
+void Et_assemble_IP(const Eigen::Ref<const Eigen::VectorXd> & E, 
+                    Eigen::MatrixXd & Et,
+                    const Eigen::Ref<const Eigen::MatrixXi> & MAP, 
+                    int i, int k, int t, int kt);
 
 Eigen::MatrixXd Z_assemble(const Eigen::MatrixXd & masterZ, 
                            const Eigen::MatrixXi & MAP,
                            int i, int k, int t, int kt);
 
-void Z_assemble_IP(const Eigen::MatrixXd & masterZ, 
-                      Eigen::MatrixXd & Z_out,
-                const Eigen::MatrixXi & MAP,
-                int i, int k, int t, int kt);
+void Z_assemble_IP(const Eigen::Ref<const Eigen::MatrixXd> & masterZ, 
+                   Eigen::MatrixXd & Z_out,
+                   const Eigen::Ref<const Eigen::MatrixXi> & MAP,
+                   int i, int k, int t, int kt);
 
 Eigen::VectorXd R_expand(const Eigen::VectorXd & R,
                          const Eigen::MatrixXi & MAP,

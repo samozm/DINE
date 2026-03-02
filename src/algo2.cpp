@@ -544,7 +544,7 @@ int a2_initial_estimates(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
 Rcpp::List estimate_DEbeta(const Eigen::Map<Eigen::MatrixXd> X, 
                            const Eigen::Map<Eigen::VectorXd> y, 
                            const Eigen::Map<Eigen::MatrixXd> masterZ, 
-                           const Eigen::Map<Eigen::MatrixXi> MAP
+                           const Eigen::Map<Eigen::MatrixXi> MAP,
                            int n, int k, int t,
                            Eigen::ArrayXXd theta,
                            int max_itr=250, 
