@@ -12,11 +12,10 @@
 ******************************************************************************
 */
 
-Eigen::VectorXd Zbcalc(const Eigen::MatrixXd & Z, 
-                       const Eigen::VectorXd & b, 
-                       const Eigen::MatrixXi & MAP, 
-                       int n, int k, int t, 
-                       int nkt)
+Eigen::VectorXd Zbcalc(const Eigen::Ref<const Eigen::MatrixXd> & Z, 
+                       const Eigen::Ref<const Eigen::VectorXd> & b, 
+                       const Eigen::Ref<const Eigen::MatrixXi> & MAP, 
+                       int n, int k, int t, int nkt)
 {
     Eigen::VectorXd Zb = Eigen::VectorXd::Zero(nkt);
     Eigen::VectorXi kt_vec = MAP.rowwise().sum();
@@ -33,10 +32,13 @@ Eigen::VectorXd Zbcalc(const Eigen::MatrixXd & Z,
 }
 
 
-void calc_b(const Eigen::MatrixXd & X, const Eigen::VectorXd & r0, 
-            const Eigen::MatrixXd & Z,
-            const Eigen::MatrixXd & Lambda_D, const Eigen::VectorXd & E, Eigen::VectorXd & b,
-            const Eigen::MatrixXi & MAP,
+void calc_b(const Eigen::Ref<const Eigen::MatrixXd> & X, 
+            const Eigen::Ref<const Eigen::VectorXd> & r0, 
+            const Eigen::Ref<const Eigen::MatrixXd> & Z,
+            const Eigen::Ref<const Eigen::MatrixXd> & Lambda_D, 
+            const Eigen::Ref<const Eigen::VectorXd> & E, 
+            Eigen::VectorXd & b,
+            const Eigen::Ref<const Eigen::MatrixXi> & MAP,
             int n, int k, int t, int nkt)
 {
     int q = 2*k;
@@ -72,10 +74,12 @@ void calc_b(const Eigen::MatrixXd & X, const Eigen::VectorXd & r0,
     b = Lambda_D.transpose() * DtZEEZDDZETEr0;
 }
 
-void estimate_E(const Eigen::MatrixXd & X, const Eigen::VectorXd & r0, 
-                const Eigen::MatrixXd & Z,
-                const Eigen::MatrixXd & Lambda_D, Eigen::VectorXd & Lambda_E,
-                const Eigen::MatrixXi & MAP, 
+void estimate_E(const Eigen::Ref<const Eigen::MatrixXd> & X, 
+                const Eigen::Ref<const Eigen::VectorXd> & r0, 
+                const Eigen::Ref<const Eigen::MatrixXd> & Z,
+                const Eigen::Ref<const Eigen::MatrixXd> & Lambda_D, 
+                Eigen::VectorXd & Lambda_E,
+                const Eigen::Ref<const Eigen::MatrixXi> & MAP, 
                 int n, int k, int t, int nkt)
 {
     Eigen::VectorXd b;
@@ -110,9 +114,12 @@ void estimate_E(const Eigen::MatrixXd & X, const Eigen::VectorXd & r0,
     Lambda_E = (mean_sq - means.square()).max(1e-8).sqrt();
 }
 
-void calc_e(const Eigen::VectorXd & r0, const Eigen::MatrixXd & Z,
-            const Eigen::VectorXd & E, const Eigen::MatrixXd & Lambda_D, 
-            const Eigen::MatrixXi & MAP, Eigen::VectorXd & e, 
+void calc_e(const Eigen::Ref<const Eigen::VectorXd> & r0, 
+            const Eigen::Ref<const Eigen::MatrixXd> & Z,
+            const Eigen::Ref<const Eigen::VectorXd> & E, 
+            const Eigen::Ref<const Eigen::MatrixXd> & Lambda_D, 
+            const Eigen::Ref<const Eigen::MatrixXi> & MAP, 
+            Eigen::VectorXd & e, 
             int n, int k, int t, int nkt)
 {
     int p = 2*k;
@@ -300,10 +307,13 @@ void a2_threshold_D(const Eigen::MatrixXd & R, Eigen::MatrixXd& sigma,
 
 }
 
-void estimate_D(const Eigen::MatrixXd & X, const Eigen::VectorXd & r0, 
-                const Eigen::MatrixXd & Z,
-                const Eigen::VectorXd & E, Eigen::MatrixXd & Lambda_D, 
-                const Eigen::MatrixXi & MAP, Eigen::MatrixXd & D,
+void estimate_D(const Eigen::Ref<const Eigen::MatrixXd> & X, 
+                const Eigen::Ref<const Eigen::VectorXd> & r0, 
+                const Eigen::Ref<const Eigen::MatrixXd> & Z,
+                const Eigen::Ref<const Eigen::VectorXd> & E, 
+                Eigen::MatrixXd & Lambda_D, 
+                const Eigen::Ref<const Eigen::MatrixXi> & MAP, 
+                Eigen::MatrixXd & D,
                 Eigen::ArrayXXd & theta,
                 int n, int k, int t, int nkt, 
                 int itr, int n_fold=5, 
@@ -374,10 +384,11 @@ void estimate_D(const Eigen::MatrixXd & X, const Eigen::VectorXd & r0,
     Lambda_D = llt.matrixL();
 }
 
-double calc_sigma2(const Eigen::MatrixXd & Z, 
-                   const Eigen::MatrixXd& D, const Eigen::VectorXd& E, 
-                   const Eigen::MatrixXi & MAP,
-                   const Eigen::VectorXd& r0, 
+double calc_sigma2(const Eigen::Ref<const Eigen::MatrixXd> & Z, 
+                   const Eigen::Ref<const Eigen::MatrixXd> & D, 
+                   const Eigen::Ref<const Eigen::VectorXd> & E, 
+                   const Eigen::Ref<const Eigen::MatrixXi> & MAP,
+                   const Eigen::Ref<const Eigen::VectorXd> & r0, 
                    int n, int k, int t, int p, 
                    bool REML=false)
 {
@@ -422,8 +433,25 @@ int a2_initial_estimates(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
 {
     int p = X.cols();
     int q = 2*k; 
-    Eigen::MatrixXd XtX = X.transpose() * X;
-    Eigen::VectorXd Xty = X.transpose() * y;
+    // Manual XtX and Xty to bypass Apple Accelerate crashes
+    Eigen::MatrixXd XtX = Eigen::MatrixXd::Zero(p, p);
+    Eigen::VectorXd Xty = Eigen::VectorXd::Zero(p);
+    
+    for(int i=0; i < X.rows(); ++i) {
+        for(int c1=0; c1 < p; ++c1) {
+            Xty(c1) += X(i, c1) * y(i);
+            for(int c2=0; c2 <= c1; ++c2) {
+                XtX(c1, c2) += X(i, c1) * X(i, c2);
+            }
+        }
+    }
+    
+    // Mirror the lower triangle to upper
+    for(int c1=0; c1 < p; ++c1) {
+        for(int c2=c1+1; c2 < p; ++c2) {
+            XtX(c1, c2) = XtX(c2, c1);
+        }
+    }
     beta = XtX.ldlt().solve(Xty);
     r = y - X * beta;
     Eigen::MatrixXd R(n,k*t);
@@ -513,9 +541,10 @@ int a2_initial_estimates(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
 //'
 //' @export
 // [[Rcpp::export]]
-Rcpp::List estimate_DEbeta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y, 
-                           const Eigen::MatrixXd & masterZ,
-                           const Eigen::MatrixXi & MAP,
+Rcpp::List estimate_DEbeta(const Eigen::Map<Eigen::MatrixXd> X, 
+                           const Eigen::Map<Eigen::VectorXd> y, 
+                           const Eigen::Map<Eigen::MatrixXd> masterZ, 
+                           const Eigen::Map<Eigen::MatrixXi> MAP
                            int n, int k, int t,
                            Eigen::ArrayXXd theta,
                            int max_itr=250, 

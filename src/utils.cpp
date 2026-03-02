@@ -100,24 +100,45 @@ Eigen::MatrixXd covCalc(const Eigen::MatrixXd & X)
 }
 
 // [[Rcpp::export]]
-Eigen::MatrixXd covCalc(const Eigen::MatrixXd & X, const Eigen::MatrixXi & MAP, bool print)
+Eigen::MatrixXd covCalc(const Eigen::MatrixXd & X, const Eigen::MatrixXi & MAP, bool print = false)
 {
     int n = X.rows();
     int p = X.cols();
 
-    // Select values of X where MAP is positive, otherwise input 0
-    Eigen::MatrixXd Xz = (MAP.array() != 0).select(X,0.0);
+    Eigen::MatrixXd SumXY = Eigen::MatrixXd::Zero(p, p);
+    Eigen::MatrixXd N = Eigen::MatrixXd::Zero(p, p);
+    Eigen::MatrixXd SumX_shared = Eigen::MatrixXd::Zero(p, p);
 
-    Eigen::MatrixXd MAPd = MAP.cast<double>();
-    // Sum of Xi * Xj for all pairs of nodes
-    Eigen::MatrixXd SumXY = Xz.transpose() * Xz;
-    // number of observations shared by i and j
-    Eigen::MatrixXd N = MAPd.transpose() * MAPd;
-    // Sum of X(i,) where MAP(i,j) is 1
-    Eigen::MatrixXd SumX_shared = Xz.transpose() * MAPd;
+    for(int i = 0; i < n; ++i)
+    {
+        // 1. Collect non-zero indices to skip the vast majority of the empty matrix
+        std::vector<int> active;
+        active.reserve(p);
+        for(int c = 0; c < p; ++c) {
+            if(MAP(i, c) != 0) active.push_back(c);
+        }
+
+        // 2. Only loop over active observation pairs!
+        for(size_t idx1 = 0; idx1 < active.size(); ++idx1)
+        {
+            int c1 = active[idx1];
+            double x1 = X(i, c1);
+            for(size_t idx2 = 0; idx2 <= idx1; ++idx2)
+            {
+                int c2 = active[idx2];
+                double x2 = X(i, c2);
+
+                SumXY(c1, c2) += x1 * x2;
+                N(c1, c2) += 1.0;
+                SumX_shared(c1, c2) += x1;
+                if(c1 != c2) {
+                    SumX_shared(c2, c1) += x2;
+                }
+            }
+        }
+    }
+
     Eigen::MatrixXd cov = Eigen::MatrixXd::Zero(p,p);
-
-    #pragma omp parallel for schedule(dynamic)
     for(int i=0; i < p; ++i)
     {
         for(int j=0; j <= i; ++j)
@@ -127,15 +148,13 @@ Eigen::MatrixXd covCalc(const Eigen::MatrixXd & X, const Eigen::MatrixXi & MAP, 
             {
                 double val = (SumXY(i, j) - (SumX_shared(i, j) * SumX_shared(j, i) / Nij)) / Nij;
                 cov(i,j) = val;
-                if(i != j) 
-                {
-                    cov(j,i) = val;
-                }
+                if(i != j) cov(j,i) = val;
             }
         }
     }
-    return(cov);
+    return cov;
 }
+
 
 Eigen::VectorXd varCalcDiag(const Eigen::MatrixXd & X, const Eigen::MatrixXi & MAP, bool print)
 {
@@ -313,11 +332,12 @@ Eigen::MatrixXd Z_assemble(const Eigen::MatrixXd & masterZ,
     return(Z_out);
 }
 
-void Et_assemble_IP(const Eigen::VectorXd & E, 
-                       Eigen::MatrixXd & Et,
-                 const Eigen::MatrixXi & MAP, 
-                 int i, int k, int t, int kt)
+void Et_assemble_IP(const Eigen::Ref<const Eigen::VectorXd> & E, 
+                    Eigen::MatrixXd & Et,
+                    const Eigen::Ref<const Eigen::MatrixXi> & MAP, 
+                    int i, int k, int t, int kt)
 {
+    // Function body remains identical
     Et.setZero(kt,kt);
     int cnt = 0;
     int cnt2 = 0;
@@ -335,11 +355,12 @@ void Et_assemble_IP(const Eigen::VectorXd & E,
     }
 }
 
-void Z_assemble_IP(const Eigen::MatrixXd & masterZ, 
-                      Eigen::MatrixXd & Z_out,
-                const Eigen::MatrixXi & MAP,
-                int i, int k, int t, int kt)
+void Z_assemble_IP(const Eigen::Ref<const Eigen::MatrixXd> & masterZ, 
+                   Eigen::MatrixXd & Z_out,
+                   const Eigen::Ref<const Eigen::MatrixXi> & MAP,
+                   int i, int k, int t, int kt)
 {
+    // Function body remains identical
     Z_out.resize(kt,2*k);
     int cnt = 0;
     for(int j = 0; j<k*t; ++j)
@@ -439,11 +460,13 @@ void estimate_beta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
     }
 }
 
-void estimate_beta2(const Eigen::MatrixXd & X, const Eigen::VectorXd & y, 
-                    const Eigen::MatrixXd & Z,
-                    const Eigen::MatrixXd & D,
-                    const Eigen::VectorXd & E,
-                    const Eigen::VectorXi kt_vec, const Eigen::MatrixXi & MAP,
+void estimate_beta2(const Eigen::Ref<const Eigen::MatrixXd> & X, 
+                    const Eigen::Ref<const Eigen::VectorXd> & y, 
+                    const Eigen::Ref<const Eigen::MatrixXd> & Z,
+                    const Eigen::Ref<const Eigen::MatrixXd> & D,
+                    const Eigen::Ref<const Eigen::VectorXd> & E,
+                    const Eigen::VectorXi & kt_vec, 
+                    const Eigen::Ref<const Eigen::MatrixXi> & MAP,
                     Eigen::VectorXd & beta,
                     int n, int k, int t)
 {
@@ -517,35 +540,47 @@ Eigen::VectorXd R_expand(const Eigen::VectorXd & R,
     return(R_out);
 }
 
-
-Eigen::MatrixXd RtR(const Eigen::MatrixXd & R, const Eigen::MatrixXi & MAP)//const Eigen::MatrixXd & R, const Eigen::MatrixXi & MAP)
+Eigen::MatrixXd RtR(const Eigen::MatrixXd & R, const Eigen::MatrixXi & MAP)
 {
+    int n = R.rows();
     int p = R.cols();
 
-    // 1. Vectorized Square and Zero-Masking
-    Eigen::MatrixXd R_sq = (MAP.array() != 0).select(R.array().square().matrix(), 0.0);
-    Eigen::MatrixXd MAP_d = MAP.cast<double>();
-    
-    // 2. BLAS Matrix Multiplication (Instantaneous)
-    Eigen::MatrixXd N = MAP_d.transpose() * MAP_d;
-    Eigen::MatrixXd SumRsq = R_sq.transpose() * R_sq;
-    
-    Eigen::MatrixXd cov = Eigen::MatrixXd::Zero(p, p);
+    Eigen::MatrixXd SumRsq = Eigen::MatrixXd::Zero(p, p);
+    Eigen::MatrixXd N = Eigen::MatrixXd::Zero(p, p);
 
-    // 3. Fast Assembly
-    #pragma omp parallel for schedule(dynamic)
+    for(int i = 0; i < n; ++i)
+    {
+        std::vector<int> active;
+        active.reserve(p);
+        for(int c = 0; c < p; ++c) {
+            if(MAP(i, c) != 0) active.push_back(c);
+        }
+
+        for(size_t idx1 = 0; idx1 < active.size(); ++idx1)
+        {
+            int c1 = active[idx1];
+            double rsq1 = R(i, c1) * R(i, c1); // Vectorized Square inside the loop!
+            for(size_t idx2 = 0; idx2 <= idx1; ++idx2)
+            {
+                int c2 = active[idx2];
+                double rsq2 = R(i, c2) * R(i, c2);
+
+                SumRsq(c1, c2) += rsq1 * rsq2;
+                N(c1, c2) += 1.0;
+            }
+        }
+    }
+
+    Eigen::MatrixXd cov = Eigen::MatrixXd::Zero(p, p);
     for(int i=0; i < p; ++i)
     {
         for(int j=0; j <= i; ++j)
         {
-            if(N(i,j) > 0.0) // Protect against divide by zero
+            if(N(i,j) > 0.0) 
             {
                 double val = SumRsq(i, j) / N(i,j);
                 cov(i, j) = val;
-                if(i != j) 
-                {
-                    cov(j, i) = val;
-                }
+                if(i != j) cov(j, i) = val;
             }
         }
     }
