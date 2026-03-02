@@ -155,6 +155,88 @@ Eigen::MatrixXd covCalc(const Eigen::MatrixXd & X, const Eigen::MatrixXi & MAP, 
     return cov;
 }
 
+void get_cov_stats(const Eigen::Ref<const Eigen::MatrixXd>& R, 
+                   const Eigen::Ref<const Eigen::MatrixXi>& MAP, 
+                   const std::vector<int>& indices,
+                   Eigen::MatrixXd& SumXY, Eigen::MatrixXd& N, 
+                   Eigen::MatrixXd& SumX_shared, Eigen::MatrixXd& SumRsq)
+{
+    int p = R.cols();
+    SumXY.setZero(p, p);
+    N.setZero(p, p);
+    SumX_shared.setZero(p, p);
+    SumRsq.setZero(p, p);
+
+    for(int row_idx : indices) 
+    {
+        // 1. Find active nodes for this subject
+        std::vector<int> active;
+        active.reserve(p);
+        for(int c = 0; c < p; ++c) {
+            if(MAP(row_idx, c) != 0) active.push_back(c);
+        }
+
+        // 2. Accumulate raw sums for the active pairs
+        for(size_t idx1 = 0; idx1 < active.size(); ++idx1) 
+        {
+            int c1 = active[idx1];
+            double r1 = R(row_idx, c1);
+            double rsq1 = r1 * r1;
+            
+            for(size_t idx2 = 0; idx2 <= idx1; ++idx2) 
+            {
+                int c2 = active[idx2];
+                double r2 = R(row_idx, c2);
+                double rsq2 = r2 * r2;
+
+                SumXY(c1, c2) += r1 * r2;
+                N(c1, c2) += 1.0;
+                SumX_shared(c1, c2) += r1;
+                SumRsq(c1, c2) += rsq1 * rsq2;
+                
+                if(c1 != c2) {
+                    SumX_shared(c2, c1) += r2;
+                }
+            }
+        }
+    }
+}
+
+void build_cov_and_theta(const Eigen::MatrixXd& SumXY, const Eigen::MatrixXd& N, 
+                         const Eigen::MatrixXd& SumX_shared, const Eigen::MatrixXd& SumRsq,
+                         Eigen::MatrixXd& cov, Eigen::ArrayXXd& theta)
+{
+    int p = SumXY.cols();
+    cov = Eigen::MatrixXd::Zero(p, p);
+    theta = Eigen::ArrayXXd::Zero(p, p);
+
+    for(int i = 0; i < p; ++i) 
+    {
+        for(int j = 0; j <= i; ++j) 
+        {
+            double Nij = N(i, j);
+            if(Nij > 1.0) 
+            {
+                // 1. Covariance Formula
+                double val = (SumXY(i, j) - (SumX_shared(i, j) * SumX_shared(j, i) / Nij)) / Nij;
+                cov(i, j) = val;
+                
+                // 2. R^T R Formula
+                double rtr_val = SumRsq(i, j) / Nij;
+                
+                // 3. Theta (Variance) Formula -> max(0.0) protects against microscopic float noise
+                double theta_val = std::max(0.0, rtr_val - (val * val));
+                theta(i, j) = std::sqrt(theta_val);
+                
+                // Mirror to upper triangle
+                if(i != j) {
+                    cov(j, i) = val;
+                    theta(j, i) = theta(i, j);
+                }
+            }
+        }
+    }
+}
 
 Eigen::VectorXd varCalcDiag(const Eigen::MatrixXd & X, const Eigen::MatrixXi & MAP, bool print)
 {
@@ -473,42 +555,71 @@ void estimate_beta2(const Eigen::Ref<const Eigen::MatrixXd> & X,
     int q = X.cols();
     Eigen::MatrixXd XVX = Eigen::MatrixXd::Zero(q,q);
     Eigen::VectorXd XVy = Eigen::VectorXd::Zero(q);
-    Eigen::MatrixXd Zi, Et, ZiD, V, Xi;
-    Eigen::VectorXd yi;
+    // 1. Invert D EXACTLY ONCE outside the loop (Massive CPU saving!)
+    Eigen::MatrixXd D_inv;
+    Eigen::LDLT<Eigen::MatrixXd> ldlt_D(D);
+    if(ldlt_D.info() == Eigen::Success) {
+        D_inv = ldlt_D.solve(Eigen::MatrixXd::Identity(2*k, 2*k));
+    } else {
+        D_inv = D.completeOrthogonalDecomposition().pseudoInverse();
+    }
+
+    Eigen::MatrixXd Zi, Xi, ZiX, M;
+    Eigen::VectorXd yi, E_inv, Ziy;
     int cnt = 0;
     
-    for(int i=0;i<n;++i)
+    for(int i = 0; i < n; ++i)
     {
         int kt = kt_vec(i);
-        Z_assemble_IP(Z,Zi,MAP,i,k,t,kt);
-        Et_assemble_IP(E,Et,MAP,i,k,t,kt);
-        ZiD.resize(kt, 2*k);
-        ZiD.noalias() = Zi * D;
-
-        V.resize(kt, kt);
-        V.noalias() = ZiD * Zi.transpose();
-        V += Et;
-
-        // Map block segments for X and y
+        
+        // Get Z for this subject
+        Z_assemble_IP(Z, Zi, MAP, i, k, t, kt);
+        
+        // Bypass creating a dense Et matrix. Just grab the inverted diagonal
+        E_inv.resize(kt);
+        int cnt2 = 0, c = 0;
+        for(int j = 0; j < k; ++j) {
+            for(int l = 0; l < t; ++l) {
+                if(MAP(i, cnt2) == 1) {
+                    E_inv(c++) = 1.0 / E(j); 
+                }
+                cnt2++;
+            }
+        }
+        
+        // Map the current subject's X and y
         Xi = X.block(cnt, 0, kt, q);
         yi = y.segment(cnt, kt);
-
-
-        Eigen::LDLT<Eigen::MatrixXd> ldlt(V);
-        if(ldlt.info() == Eigen::Success)
+        
+        // The Woodbury Transformation Variables
+        Eigen::MatrixXd X_tilde = E_inv.asDiagonal() * Xi;
+        Eigen::VectorXd y_tilde = E_inv.asDiagonal() * yi;
+        
+        // Accumulate the base E^-1 terms
+        XVX.noalias() += Xi.transpose() * X_tilde;
+        XVy.noalias() += Xi.transpose() * y_tilde;
+        
+        // Inner Woodbury components
+        ZiX = Zi.transpose() * X_tilde;  
+        Ziy = Zi.transpose() * y_tilde;  
+        
+        // Inner matrix M = D^-1 + Z^T * E^-1 * Z  (Always exactly 2k x 2k)
+        M = D_inv + Zi.transpose() * E_inv.asDiagonal() * Zi; 
+        
+        // Fast 2k x 2k decomposition
+        Eigen::LDLT<Eigen::MatrixXd> ldlt_M(M);
+        if(ldlt_M.info() == Eigen::Success)
         {
-            Eigen::MatrixXd VinvXi = ldlt.solve(Xi);
-            Eigen::VectorXd Vinvyi = ldlt.solve(yi);
-            
-            XVX.noalias() += Xi.transpose() * VinvXi;
-            XVy.noalias() += Xi.transpose() * Vinvyi;
+            XVX.noalias() -= ZiX.transpose() * ldlt_M.solve(ZiX);
+            XVy.noalias() -= ZiX.transpose() * ldlt_M.solve(Ziy);
         }
         else
         {
-            Eigen::MatrixXd V_inv = V.completeOrthogonalDecomposition().pseudoInverse();
-            XVX.noalias() += Xi.transpose() * (V_inv * Xi);
-            XVy.noalias() += Xi.transpose() * (V_inv * yi);
+            Eigen::MatrixXd M_inv = M.completeOrthogonalDecomposition().pseudoInverse();
+            XVX.noalias() -= ZiX.transpose() * M_inv * ZiX;
+            XVy.noalias() -= ZiX.transpose() * M_inv * Ziy;
         }
+        
         cnt += kt;
     }
     // Final beta solve outside the loop

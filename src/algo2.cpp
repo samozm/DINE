@@ -149,10 +149,23 @@ void calc_e(const Eigen::Ref<const Eigen::VectorXd> & r0,
     Eigen::LLT<Eigen::MatrixXd> BDBinvZEEZ_llt = BDBinvZEEZ.llt();
     //Eigen::MatrixXd HZEEZ(k*t,p);
     Eigen::MatrixXd EZi(k*t,p);
-    Eigen::LDLT<Eigen::MatrixXd> BDBinv_ldlt = BDBinv.ldlt();
-    Eigen::VectorXd BDBinvZr = BDBinv_ldlt.solve(Zr);
-    //Eigen::VectorXd EZiHZEEZBDBinvZr(p);
-    Eigen::MatrixXd ZEEZsolve = BDBinvZEEZ_llt.solve(ZEEZ);
+    // Safe BDBinv solve
+    Eigen::VectorXd BDBinvZr;
+    Eigen::LDLT<Eigen::MatrixXd> ldlt_BDBinv(BDBinv);
+    if(ldlt_BDBinv.info() == Eigen::Success) {
+        BDBinvZr = ldlt_BDBinv.solve(Zr);
+    } else {
+        BDBinvZr = BDBinv.completeOrthogonalDecomposition().pseudoInverse() * Zr;
+    }
+    // Safe BDBinvZEEZ solve
+    Eigen::MatrixXd ZEEZsolve;
+    Eigen::LDLT<Eigen::MatrixXd> ldlt_BDBinvZEEZ(BDBinvZEEZ);
+    if(ldlt_BDBinvZEEZ.info() == Eigen::Success) {
+        ZEEZsolve = ldlt_BDBinvZEEZ.solve(ZEEZ);
+    } else {
+        ZEEZsolve = BDBinvZEEZ.completeOrthogonalDecomposition().pseudoInverse() * ZEEZ;
+    }
+
     Eigen::VectorXd BDBinvZrZEEZsolveBDBinvZr = BDBinvZr - (ZEEZsolve * BDBinvZr);
     cnt = 0; 
     for(int i=0;i<n;++i)
@@ -172,6 +185,18 @@ void calc_e(const Eigen::Ref<const Eigen::VectorXd> & r0,
     }
 }
 
+// Helper to calculate the upper/lower bounds safely
+void get_bounds(const Eigen::MatrixXd& cov, const Eigen::ArrayXXd& theta, double& lower, double& upper) 
+{
+    Eigen::ArrayXXd safe_theta = (theta == 0.0).select(1e-8, theta);
+    Eigen::MatrixXd delta = (cov.array() / safe_theta).cwiseAbs().matrix();
+    delta.diagonal() = Eigen::VectorXd::Zero(delta.rows());
+    
+    upper = delta.maxCoeff();
+    lower = (delta.array() <= 0.0).select(std::numeric_limits<double>::max(), delta).minCoeff();
+    if (lower == std::numeric_limits<double>::max()) lower = 0.0;
+}
+
 
 void a2_thresholdRange(const Eigen::MatrixXd & R, Eigen::ArrayXXd& theta, Eigen::MatrixXd& cov, 
                     const Eigen::MatrixXi & MAP, double & lower, double & upper)
@@ -183,16 +208,13 @@ void a2_thresholdRange(const Eigen::MatrixXd & R, Eigen::ArrayXXd& theta, Eigen:
     // Prevent NaN from sqrt(negative floating point noise)
     theta = (RtR(R, MAP) - cov.array().square().matrix()).array().max(0.0).sqrt();
     
-    // The Subset Safety Net: Prevent Division by Zero!
     Eigen::ArrayXXd safe_theta = (theta == 0.0).select(1e-8, theta);
     Eigen::MatrixXd delta = (cov.array() / safe_theta).cwiseAbs().matrix();
     delta.diagonal() = Eigen::VectorXd::Zero(delta.rows());
+    
     upper = delta.maxCoeff();
-    // Fallback in case all delta values are 0 (perfect sparsity)
     lower = (delta.array() <= 0.0).select(std::numeric_limits<double>::max(), delta).minCoeff();
-    if (lower == std::numeric_limits<double>::max()) {
-        lower = 0.0; 
-    }
+    if (lower == std::numeric_limits<double>::max()) lower = 0.0;
 }
 
 void a2_threshold(const Eigen::MatrixXd& abscov, const Eigen::MatrixXd& signcov, double lambda,
@@ -249,7 +271,16 @@ void a2_threshold_D(const Eigen::MatrixXd & R, Eigen::MatrixXd& sigma,
     double upper = 0.0;
     sigma.setZero(p,p);
     
-    a2_thresholdRange(R,theta,cov,MAP,lower,upper);
+    // 1. Pre-calculate the TOTAL dataset aggregates ONCE
+    std::vector<int> all_idx(n);
+    std::iota(all_idx.begin(), all_idx.end(), 0);
+    
+    Eigen::MatrixXd SumXY_tot, N_tot, SumX_shared_tot, SumRsq_tot;
+    get_cov_stats(R, MAP, all_idx, SumXY_tot, N_tot, SumX_shared_tot, SumRsq_tot);
+    // Build the master baseline cov and theta
+    build_cov_and_theta(SumXY_tot, N_tot, SumX_shared_tot, SumRsq_tot, cov, theta);
+    get_bounds(cov, theta, lower, upper);
+
     std::vector<double> params(nParam);
     double jump = (upper - lower)/double(nParam);
     double ctr = lower;
@@ -271,15 +302,29 @@ void a2_threshold_D(const Eigen::MatrixXd & R, Eigen::MatrixXd& sigma,
     for (int i=0;i<actual_folds; ++i)
     {
         std::vector<int> val_idx;
-        std::vector<int> not_val_idx;
-        find_all(part,i,val_idx,not_val_idx);
-        double lower = 0.0;
-        double upper = 0.0; 
-        a2_thresholdRange(R(not_val_idx,Eigen::all), thetaTrain, covTrain, MAP(not_val_idx,Eigen::all), lower, upper);
-        covTest = covCalc(R(val_idx,Eigen::all),MAP(val_idx,Eigen::all));
+        std::vector<int> not_val_idx; // We keep this for find_all, but we NEVER use it!
+        find_all(part, i, val_idx, not_val_idx);
+        
+        // A. Process ONLY the tiny 20% test fold
+        Eigen::MatrixXd SumXY_test, N_test, SumX_shared_test, SumRsq_test;
+        get_cov_stats(R, MAP, val_idx, SumXY_test, N_test, SumX_shared_test, SumRsq_test);
+        
+        // B. THE TRICK: Derive the 80% train fold instantly via subtraction!
+        Eigen::MatrixXd SumXY_train = SumXY_tot - SumXY_test;
+        Eigen::MatrixXd N_train = N_tot - N_test;
+        Eigen::MatrixXd SumX_shared_train = SumX_shared_tot - SumX_shared_test;
+        Eigen::MatrixXd SumRsq_train = SumRsq_tot - SumRsq_test;
+        
+        // C. Build the matrices
+        Eigen::ArrayXXd dummy_thetaTest; // Not used, just needed for the function
+        build_cov_and_theta(SumXY_test, N_test, SumX_shared_test, SumRsq_test, covTest, dummy_thetaTest);
+        build_cov_and_theta(SumXY_train, N_train, SumX_shared_train, SumRsq_train, covTrain, thetaTrain);
+        
+        // D. OpenMP Loop
         std::vector<Eigen::MatrixXd> local_sigmas(nParam, Eigen::MatrixXd::Zero(p, p));
         Eigen::MatrixXd covTrainAbs = covTrain.cwiseAbs();
         Eigen::MatrixXd covTrainSign = covTrain.cwiseSign();
+
         #pragma omp parallel for
         for(int j=0;j<nParam;++j)
         {
@@ -293,7 +338,17 @@ void a2_threshold_D(const Eigen::MatrixXd & R, Eigen::MatrixXd& sigma,
                     sq_err += diff * diff;
                 }
             }
-            error(i,j) = std::sqrt(sq_err);
+            // Catch NaN or Infinity before it infects the error matrix
+            if (std::isnan(sq_err) || std::isinf(sq_err)) 
+            {
+                // Penalize this threshold heavily so it is never picked as the minimum,
+                // but keep it as a finite double so it doesn't break the column sum!
+                error(i,j) = std::numeric_limits<double>::max() / 10000.0; 
+            } 
+            else 
+            {
+                error(i,j) = std::sqrt(sq_err);
+            }
         }
     }
     Eigen::Index minIndex;
@@ -337,8 +392,13 @@ void estimate_D(const Eigen::Ref<const Eigen::MatrixXd> & X,
         ZiTZi.noalias() = Zi.transpose() * Zi;
         ZiTZi.diagonal().array() += 1e-8; // ridge in case a whole column is 0
         ZiTr.noalias() = Zi.transpose() * r.segment(cnt,kt);
-        Eigen::LLT<Eigen::MatrixXd> llt(ZiTZi);
-        R.row(i) = llt.solve(ZiTr).transpose(); // solve returns a column vector
+        // SAFE SOLVER:
+        Eigen::LDLT<Eigen::MatrixXd> ldlt_ZiTZi(ZiTZi);
+        if(ldlt_ZiTZi.info() == Eigen::Success) {
+            R.row(i) = ldlt_ZiTZi.solve(ZiTr).transpose();
+        } else {
+            R.row(i) = (ZiTZi.completeOrthogonalDecomposition().pseudoInverse() * ZiTr).transpose();
+        }
         cnt += kt;
     }
 
@@ -365,8 +425,9 @@ void estimate_D(const Eigen::Ref<const Eigen::MatrixXd> & X,
     {
         // Start with your chosen threshold
         double current_shift = eigen_threshold; 
-        
-        while(llt.info() == Eigen::NumericalIssue)
+        int bailout = 0; // Prevent infinite NaN loop!
+
+        while(llt.info() == Eigen::NumericalIssue && bailout < 100)
         {
             // Push the diagonal up
             solver_input.diagonal().array() += current_shift;
@@ -377,6 +438,7 @@ void estimate_D(const Eigen::Ref<const Eigen::MatrixXd> & X,
             
             // Aggressively increase the shift in case the matrix is highly negative
             current_shift *= 2.0; 
+            bailout++;
         }
     }
     
@@ -452,7 +514,13 @@ int a2_initial_estimates(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
             XtX(c1, c2) = XtX(c2, c1);
         }
     }
-    beta = XtX.ldlt().solve(Xty);
+    // SAFE SOLVER
+    Eigen::LDLT<Eigen::MatrixXd> ldlt_XtX(XtX);
+    if(ldlt_XtX.info() == Eigen::Success) {
+        beta = ldlt_XtX.solve(Xty);
+    } else {
+        beta = XtX.completeOrthogonalDecomposition().pseudoInverse() * Xty;
+    }
     r = y - X * beta;
     Eigen::MatrixXd R(n,k*t);
     int nkt = 0;

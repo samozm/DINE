@@ -35,6 +35,16 @@ Eigen::MatrixXd covCalc(const Eigen::MatrixXd & X);
 
 Eigen::MatrixXd covCalc(const Eigen::MatrixXd & X, const Eigen::MatrixXi & MAP, bool print=false);
 
+void get_cov_stats(const Eigen::Ref<const Eigen::MatrixXd>& R, 
+                   const Eigen::Ref<const Eigen::MatrixXi>& MAP, 
+                   const std::vector<int>& indices,
+                   Eigen::MatrixXd& SumXY, Eigen::MatrixXd& N, 
+                   Eigen::MatrixXd& SumX_shared, Eigen::MatrixXd& SumRsq);
+
+void build_cov_and_theta(const Eigen::MatrixXd& SumXY, const Eigen::MatrixXd& N, 
+                         const Eigen::MatrixXd& SumX_shared, const Eigen::MatrixXd& SumRsq,
+                         Eigen::MatrixXd& cov, Eigen::ArrayXXd& theta);
+
 void vec2list(const std::vector<Eigen::MatrixXd>& vec, Rcpp::List & out);
 
 void list2vec(std::vector<Eigen::MatrixXd>& vec, const Rcpp::List & list);
