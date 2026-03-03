@@ -12,6 +12,44 @@
 ******************************************************************************
 */
 
+void update_residuals(const Eigen::Ref<const Eigen::MatrixXd> & X, 
+                      const Eigen::Ref<const Eigen::VectorXd> & y, 
+                      const Eigen::Ref<const Eigen::MatrixXi> & MAP, 
+                      const Eigen::Ref<const Eigen::VectorXd> & beta, 
+                      Eigen::VectorXd & r, 
+                      int n, int k, int t)
+{
+    int p_cov = X.cols();
+    int cnt = 0;
+    
+    for(int i = 0; i < n; ++i) 
+    {
+        for(int j = 0; j < k * t; ++j) 
+        {
+            if(MAP(i, j) == 1) 
+            {
+                int node = j / t;
+                int time_idx = j % t;
+                int visit_row = i * t + time_idx;
+
+                // Dynamically multiply the active values
+                double xbeta = X(visit_row, 0) * beta(0); // Intercept
+                
+                if(node > 0) {
+                    xbeta += beta(node); // The active OTU dummy (value is exactly 1)
+                }
+                
+                for(int c = 1; c < p_cov; ++c) {
+                    xbeta += X(visit_row, c) * beta(k - 1 + c); // Dense Covariates
+                }
+
+                r(cnt) = y(cnt) - xbeta;
+                cnt++;
+            }
+        }
+    }
+}
+
 Eigen::VectorXd Zbcalc(const Eigen::Ref<const Eigen::MatrixXd> & Z, 
                        const Eigen::Ref<const Eigen::VectorXd> & b, 
                        const Eigen::Ref<const Eigen::MatrixXi> & MAP, 
@@ -199,7 +237,7 @@ void get_bounds(const Eigen::MatrixXd& cov, const Eigen::ArrayXXd& theta, double
 
 
 void a2_thresholdRange(const Eigen::MatrixXd & R, Eigen::ArrayXXd& theta, Eigen::MatrixXd& cov, 
-                    const Eigen::MatrixXi & MAP, double & lower, double & upper)
+                    const Eigen::Ref<const Eigen::MatrixXi> & MAP, double & lower, double & upper)
 {
     int n = R.rows();
     int p = R.cols();
@@ -485,58 +523,125 @@ double calc_sigma2(const Eigen::Ref<const Eigen::MatrixXd> & Z,
     return(sigma2);
 }
 
-int a2_initial_estimates(const Eigen::MatrixXd & X, const Eigen::VectorXd & y, 
-                       const Eigen::MatrixXd & Z, 
-                       const Eigen::MatrixXi & MAP, 
-                       Eigen::MatrixXd & Lambda_D, Eigen::MatrixXd & D, 
-                       Eigen::VectorXd & Lambda_E, Eigen::VectorXd & beta, 
-                       Eigen::VectorXd & r,
-                       int n, int k, int t)
+int a2_initial_estimates(const Eigen::Ref<const Eigen::MatrixXd> & X, 
+                         const Eigen::Ref<const Eigen::VectorXd> & y, 
+                         const Eigen::Ref<const Eigen::MatrixXd> & Z, 
+                         const Eigen::Ref<const Eigen::MatrixXi> & MAP,
+                         Eigen::MatrixXd & Lambda_D, Eigen::MatrixXd & D, 
+                         Eigen::VectorXd & Lambda_E, Eigen::VectorXd & beta, 
+                         Eigen::VectorXd & r,
+                         int n, int k, int t)
 {
-    int p = X.cols();
-    int q = 2*k; 
-    // Manual XtX and Xty to bypass Apple Accelerate crashes
-    Eigen::MatrixXd XtX = Eigen::MatrixXd::Zero(p, p);
-    Eigen::VectorXd Xty = Eigen::VectorXd::Zero(p);
+    // Math Geometry: Total columns = Intercept(1) + Dummies(k-1) + Covariates(p_cov-1)
+    int p_cov = X.cols();
+    int q = k + p_cov - 1; 
+
+    Eigen::MatrixXd XtX = Eigen::MatrixXd::Zero(q, q);
+    Eigen::VectorXd Xty = Eigen::VectorXd::Zero(q);
     
-    for(int i=0; i < X.rows(); ++i) {
-        for(int c1=0; c1 < p; ++c1) {
-            Xty(c1) += X(i, c1) * y(i);
-            for(int c2=0; c2 <= c1; ++c2) {
-                XtX(c1, c2) += X(i, c1) * X(i, c2);
+    int nkt = 0;
+
+    // 1. Dynamic XtX and Xty Builder (Zero memory footprint!)
+    for(int i = 0; i < n; ++i) 
+    {
+        for(int j = 0; j < k * t; ++j) 
+        {
+            if(MAP(i, j) == 1) 
+            {
+                int node = j / t;
+                int time_idx = j % t;
+                int visit_row = i * t + time_idx; // Exact O(1) grid lookup
+
+                // Dynamically map ONLY the non-zero columns for this row
+                std::vector<int> active_cols;
+                std::vector<double> active_vals;
+                active_cols.reserve(p_cov + 1);
+                active_vals.reserve(p_cov + 1);
+
+                // A. Intercept
+                active_cols.push_back(0);
+                active_vals.push_back(X(visit_row, 0));
+
+                // B. The Single Active OTU Dummy
+                if(node > 0) {
+                    active_cols.push_back(node);
+                    active_vals.push_back(1.0);
+                }
+
+                // C. Dense Covariates
+                for(int c = 1; c < p_cov; ++c) {
+                    active_cols.push_back(k - 1 + c);
+                    active_vals.push_back(X(visit_row, c));
+                }
+
+                double yi = y(nkt);
+
+                // Accumulate the Math using only the active, non-zero values
+                for(size_t idx1 = 0; idx1 < active_cols.size(); ++idx1) {
+                    int c1 = active_cols[idx1];
+                    double v1 = active_vals[idx1];
+                    
+                    Xty(c1) += v1 * yi;
+
+                    for(size_t idx2 = 0; idx2 <= idx1; ++idx2) {
+                        int c2 = active_cols[idx2];
+                        double v2 = active_vals[idx2];
+                        XtX(c1, c2) += v1 * v2;
+                    }
+                }
+                nkt++;
             }
         }
     }
-    
+
     // Mirror the lower triangle to upper
-    for(int c1=0; c1 < p; ++c1) {
-        for(int c2=c1+1; c2 < p; ++c2) {
+    for(int c1 = 0; c1 < q; ++c1) {
+        for(int c2 = c1 + 1; c2 < q; ++c2) {
             XtX(c1, c2) = XtX(c2, c1);
         }
     }
-    // SAFE SOLVER
+
+    // 2. Safe Initial Solver
     Eigen::LDLT<Eigen::MatrixXd> ldlt_XtX(XtX);
     if(ldlt_XtX.info() == Eigen::Success) {
         beta = ldlt_XtX.solve(Xty);
     } else {
         beta = XtX.completeOrthogonalDecomposition().pseudoInverse() * Xty;
     }
-    r = y - X * beta;
-    Eigen::MatrixXd R(n,k*t);
-    int nkt = 0;
-    for(int i = 0; i<n; ++i)
+
+    // 3. Dynamic Residual Calculation (Bypassing the massive X * beta multiplication)
+    r = Eigen::VectorXd::Zero(nkt);
+    Eigen::MatrixXd R = Eigen::MatrixXd::Zero(n, k * t);
+    
+    int cnt = 0;
+    for(int i = 0; i < n; ++i) 
     {
-        int kt0 = 0; // Tracks how many valid nodes this specific subject has
-        for(int j = 0; j < k*t; ++j)
+        for(int j = 0; j < k * t; ++j) 
         {
-            if(MAP(i, j) == 1)
+            if(MAP(i, j) == 1) 
             {
-                R(i, j) = r(nkt + kt0);
-                kt0++;
+                int node = j / t;
+                int time_idx = j % t;
+                int visit_row = i * t + time_idx;
+
+                // Dot product of the dynamic row and the beta vector
+                double xbeta = X(visit_row, 0) * beta(0);
+                if(node > 0) {
+                    xbeta += beta(node); // Dummy multiplier is exactly 1.0
+                }
+                for(int c = 1; c < p_cov; ++c) {
+                    xbeta += X(visit_row, c) * beta(k - 1 + c);
+                }
+
+                // Populate the R matrices securely
+                r(cnt) = y(cnt) - xbeta;
+                R(i, j) = r(cnt);
+                cnt++;
             }
         }
-        nkt += kt0;
     }
+
+    // Calculate initial covariance matrix
     Eigen::MatrixXd cov_int = covCalc(R, MAP);
     for(int i=0;i<k;++i)
     {
@@ -545,8 +650,8 @@ int a2_initial_estimates(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
 
     cov_int.diagonal() = cov_int.diagonal()/2;
 
-    Eigen::MatrixXd B = Eigen::MatrixXd::Zero(q,q); 
-    Eigen::MatrixXd ZCZ = Eigen::MatrixXd::Zero(q,q);
+    Eigen::MatrixXd B = Eigen::MatrixXd::Zero(2*k,2*k); 
+    Eigen::MatrixXd ZCZ = Eigen::MatrixXd::Zero(2*k,2*k);
     Eigen::VectorXi kt_vec = MAP.rowwise().sum();
     Eigen::MatrixXd Zi(k*t,2*k);
     for(int i=0; i<n;++i)
@@ -564,7 +669,7 @@ int a2_initial_estimates(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
     
     // 3. Transpose back to get D
     D = D_transpose.transpose();
-    Lambda_D = (D + Eigen::MatrixXd::Identity(q,q)).llt().matrixL();
+    Lambda_D = (D + Eigen::MatrixXd::Identity(2*k,2*k)).llt().matrixL();
     return nkt;
 }
 
@@ -575,10 +680,10 @@ int a2_initial_estimates(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
 //' fixed effects (\code{beta}), random effect covariance (\code{D}), and residual variance (\code{E}) 
 //' using block-coordinate descent and cross-validated thresholding.
 //'
-//' @param X Numeric matrix of fixed effect covariates.
+//' @param X Numeric matrix of fixed effect covariates. NT x p (fixeff for nodes are automatically added)
 //' @param y Numeric vector of the continuous response variable.
 //' @param masterZ Master random effect matrix containing all timepoints used by any subject
-//' @param MAP Integer matrix, n x kt describing which node/timepoint combinations each subject has
+//' @param MAP Integer matrix, N x KT describing which node/timepoint combinations each subject has
 //' @param n Integer. Number of subjects.
 //' @param k Integer. Number of nodes or spatial features.
 //' @param t Integer. Number of time points per subject.
@@ -673,7 +778,8 @@ Rcpp::List estimate_DEbeta(const Eigen::Map<Eigen::MatrixXd> X,
         auto t2 = std::chrono::high_resolution_clock::now();
         double err2 = (beta - beta_prev).squaredNorm() / beta_prev.squaredNorm(); 
 
-        r0 = y - X * beta; 
+        //r0 = y - X * beta; 
+        update_residuals(X, y, MAP, beta, r0, n, k, t);
         D_prev = Lambda_D;
         estimate_D(X,r0,masterZ,Lambda_E.array().square(),Lambda_D,MAP,D,theta,n,k,t,nkt,n_itr,n_fold,custom_theta);
         auto t3 = std::chrono::high_resolution_clock::now();
