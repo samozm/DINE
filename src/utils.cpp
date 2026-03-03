@@ -572,7 +572,7 @@ void estimate_beta2(const Eigen::Ref<const Eigen::MatrixXd> & X_visit,
     Eigen::VectorXd E_inv_buffer(k * t);
     Eigen::VectorXd y_tilde_buffer(k * t);
     Eigen::VectorXd Ziy_buffer(2 * k);
-    Eigen::MatrixXd Zi(k*t,2*k), M;
+    Eigen::MatrixXd Zi, M;
     Eigen::VectorXd yi;
     int cnt = 0;
     for(int i = 0; i < n; ++i)
@@ -580,8 +580,7 @@ void estimate_beta2(const Eigen::Ref<const Eigen::MatrixXd> & X_visit,
         int kt = kt_vec(i);
         if(kt == 0) continue;
         // Get Z for this subject
-        Eigen::Block<Eigen::MatrixXd> Zi_view = Zi.topLeftCorner(kt, 2*k);
-        Z_assemble_IP(Z, Zi_view, MAP, i, k, t, kt);
+        Z_assemble_IP(Z, Zi, MAP, i, k, t, kt);
         
         // 1. DYNAMIC L1 CACHE BUILDER
         // We construct Xi on the fly instead of reading it from massive RAM!
@@ -632,11 +631,11 @@ void estimate_beta2(const Eigen::Ref<const Eigen::MatrixXd> & X_visit,
         XVy.noalias() += Xi_view.transpose() * y_tilde_view;
         
         // Inner Woodbury components
-        ZiX_view.noalias() = Zi_view.transpose() * X_tilde_view;  
-        Ziy_buffer.noalias() = Zi_view.transpose() * y_tilde_view;
+        ZiX_view.noalias() = Zi.transpose() * X_tilde_view;  
+        Ziy_buffer.noalias() = Zi.transpose() * y_tilde_view;
         
         // Inner matrix M = D^-1 + Z^T * E^-1 * Z  (Always exactly 2k x 2k)
-        M = D_inv + Zi_view.transpose() * E_inv_view.asDiagonal() * Zi_view; 
+        M = D_inv + Zi.transpose() * E_inv_view.asDiagonal() * Zi; 
         
         // Fast 2k x 2k decomposition
         Eigen::LDLT<Eigen::MatrixXd> ldlt_M(M);
