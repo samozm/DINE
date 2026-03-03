@@ -541,34 +541,34 @@ int a2_initial_estimates(const Eigen::Ref<const Eigen::MatrixXd> & X,
     
     int nkt = 0;
 
-    // 1. Dynamic XtX and Xty Builder (Zero memory footprint!)
+    // Dynamic XtX and Xty Builder
+    std::vector<int> active_cols;
+    std::vector<double> active_vals;
+    active_cols.reserve(p_cov + 1);
+    active_vals.reserve(p_cov + 1);
     for(int i = 0; i < n; ++i) 
     {
         for(int j = 0; j < k * t; ++j) 
         {
             if(MAP(i, j) == 1) 
             {
+                active_cols.clear();
+                active_vals.clear();
                 int node = j / t;
                 int time_idx = j % t;
                 int visit_row = i * t + time_idx; // Exact O(1) grid lookup
 
-                // Dynamically map ONLY the non-zero columns for this row
-                std::vector<int> active_cols;
-                std::vector<double> active_vals;
-                active_cols.reserve(p_cov + 1);
-                active_vals.reserve(p_cov + 1);
-
-                // A. Intercept
+                // Intercept
                 active_cols.push_back(0);
                 active_vals.push_back(X(visit_row, 0));
 
-                // B. The Single Active OTU Dummy
+                // The Single Active OTU 
                 if(node > 0) {
                     active_cols.push_back(node);
                     active_vals.push_back(1.0);
                 }
 
-                // C. Dense Covariates
+                // Dense Covariates
                 for(int c = 1; c < p_cov; ++c) {
                     active_cols.push_back(k - 1 + c);
                     active_vals.push_back(X(visit_row, c));
