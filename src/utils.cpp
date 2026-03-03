@@ -556,104 +556,66 @@ void estimate_beta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
     }
 }
 
-void estimate_beta2(const Eigen::Ref<const Eigen::MatrixXd> & X_visit, 
+void estimate_beta2(const std::vector<Eigen::MatrixXd> & Xi_list, 
                     const Eigen::Ref<const Eigen::VectorXd> & y, 
-                    const Eigen::Ref<const Eigen::MatrixXd> & Z,
+                    const std::vector<Eigen::MatrixXd> & Zi_list,
                     const Eigen::Ref<const Eigen::MatrixXd> & D,
                     const Eigen::Ref<const Eigen::VectorXd> & E,
                     const Eigen::VectorXi & kt_vec, 
                     const Eigen::Ref<const Eigen::MatrixXi> & MAP,
-                    Eigen::VectorXd & beta,
-                    int n, int k, int t)
+                    Eigen::VectorXd & beta, int n, int k, int t)
 {
-    // Math Geometry: Total columns = Intercept(1) + Dummies(k-1) + Covariates(p_cov-1)
-    int p_cov = X_visit.cols(); 
-    int q = k + p_cov - 1;
+    int q = Xi_list[0].cols();
     Eigen::MatrixXd XVX = Eigen::MatrixXd::Zero(q,q);
     Eigen::VectorXd XVy = Eigen::VectorXd::Zero(q);
-    /// Invert D 
+    
     Eigen::MatrixXd D_safe = D;
     D_safe.diagonal().array() += 1e-6; 
-
     Eigen::MatrixXd D_inv;
     Eigen::LDLT<Eigen::MatrixXd> ldlt_D(D_safe);
-    if(ldlt_D.info() == Eigen::Success) {
-        D_inv = ldlt_D.solve(Eigen::MatrixXd::Identity(2*k, 2*k));
-    } else {
-        D_inv = D_safe.completeOrthogonalDecomposition().pseudoInverse();
-    }
+    if(ldlt_D.info() == Eigen::Success) D_inv = ldlt_D.solve(Eigen::MatrixXd::Identity(2*k, 2*k));
+    else D_inv = D_safe.completeOrthogonalDecomposition().pseudoInverse();
 
-    Eigen::MatrixXd Xi, Zi, M;
-    Eigen::VectorXd yi, E_inv;
+    Eigen::VectorXd Et_diag;
     int cnt = 0;
-    for(int i = 0; i < n; ++i)
-    {
+    for(int i = 0; i < n; ++i) {
         int kt = kt_vec(i);
         if(kt == 0) continue;
-        // Get Z for this subject
-        Z_assemble_IP(Z, Zi, MAP, i, k, t, kt);
-        Xi = Eigen::MatrixXd::Zero(kt, q); // Contiguous L1 memory!
-        E_inv.resize(kt);
-        
-        int local_row = 0;
-        for(int j = 0; j < k * t; ++j) {
-            if(MAP(i, j) == 1) {
-                int node = j / t;       
-                int time_idx = j % t;   
-                int visit_row = i * t + time_idx; 
-                
-                Xi(local_row, 0) = X_visit(visit_row, 0);
-                if(node > 0) Xi(local_row, node) = 1.0; 
-                for(int c = 1; c < p_cov; ++c) Xi(local_row, k - 1 + c) = X_visit(visit_row, c);
-                
-                E_inv(local_row) = 1.0 / std::max(E(node), 1e-8);
-                local_row++;
-            }
-        }
 
-        yi = y.segment(cnt, kt);
-        
-        // The Woodbury Transformation Variables
+        // Zero-Cost Reference to the Cache!
+        const Eigen::MatrixXd& Xi = Xi_list[i];
+        const Eigen::MatrixXd& Zi = Zi_list[i];
+
+        Et_diag_assemble(E, Et_diag, MAP, i, k, t, kt);
+        Eigen::VectorXd E_inv = Et_diag.array().inverse().max(1e-8); 
+        Eigen::VectorXd yi = y.segment(cnt, kt);
+
         Eigen::MatrixXd X_tilde = E_inv.asDiagonal() * Xi;
         Eigen::VectorXd y_tilde = E_inv.asDiagonal() * yi;
-        
-        // Accumulate the base E^-1 terms
+
         XVX.noalias() += Xi.transpose() * X_tilde;
         XVy.noalias() += Xi.transpose() * y_tilde;
-        
-        // Inner Woodbury components
+
         Eigen::MatrixXd ZiX = Zi.transpose() * X_tilde;  
         Eigen::VectorXd Ziy = Zi.transpose() * y_tilde;
         
-        // Inner matrix M = D^-1 + Z^T * E^-1 * Z  (Always exactly 2k x 2k)
-        M = D_inv + Zi.transpose() * E_inv.asDiagonal() * Zi; 
+        Eigen::MatrixXd M = D_inv + Zi.transpose() * E_inv.asDiagonal() * Zi; 
         
-        // Fast 2k x 2k decomposition
         Eigen::LDLT<Eigen::MatrixXd> ldlt_M(M);
-        if(ldlt_M.info() == Eigen::Success)
-        {
+        if(ldlt_M.info() == Eigen::Success) {
             XVX.noalias() -= ZiX.transpose() * ldlt_M.solve(ZiX);
             XVy.noalias() -= ZiX.transpose() * ldlt_M.solve(Ziy);
-        }
-        else
-        {
+        } else {
             Eigen::MatrixXd M_inv = M.completeOrthogonalDecomposition().pseudoInverse();
             XVX.noalias() -= ZiX.transpose() * M_inv * ZiX;
             XVy.noalias() -= ZiX.transpose() * M_inv * Ziy;
         }
-        
         cnt += kt;
     }
-    // Final beta solve outside the loop
+    
     Eigen::LDLT<Eigen::MatrixXd> ldlt_XVX(XVX);
-    if(ldlt_XVX.info() == Eigen::Success)
-    {
-        beta = ldlt_XVX.solve(XVy);
-    }
-    else
-    {
-        beta = XVX.completeOrthogonalDecomposition().pseudoInverse() * XVy;
-    }
+    if(ldlt_XVX.info() == Eigen::Success) beta = ldlt_XVX.solve(XVy);
+    else beta = XVX.completeOrthogonalDecomposition().pseudoInverse() * XVy;
 }
 
 Eigen::VectorXd R_expand(const Eigen::VectorXd & R,

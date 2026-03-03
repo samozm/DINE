@@ -73,15 +73,14 @@ void estimate_beta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
                    const std::vector<Eigen::MatrixXd> & V, Eigen::VectorXd & beta,
                    int n, int k, int t);
 
-void estimate_beta2(const Eigen::Ref<const Eigen::MatrixXd> & X, 
+void estimate_beta2(const std::vector<Eigen::MatrixXd> & Xi_list, 
                     const Eigen::Ref<const Eigen::VectorXd> & y, 
-                    const Eigen::Ref<const Eigen::MatrixXd> & Z,
+                    const std::vector<Eigen::MatrixXd> & Zi_list,
                     const Eigen::Ref<const Eigen::MatrixXd> & D,
                     const Eigen::Ref<const Eigen::VectorXd> & E,
                     const Eigen::VectorXi & kt_vec, 
                     const Eigen::Ref<const Eigen::MatrixXi> & MAP,
-                    Eigen::VectorXd & beta,
-                    int n, int k, int t);
+                    Eigen::VectorXd & beta, int n, int k, int t);
 
 Eigen::MatrixXd Et_assemble(const Eigen::VectorXd & E, 
                             const Eigen::MatrixXi & MAP, 
