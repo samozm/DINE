@@ -104,6 +104,7 @@ Eigen::MatrixXd covCalc(const Eigen::MatrixXd & X, const Eigen::MatrixXi & MAP, 
 {
     int n = X.rows();
     int p = X.cols();
+    int full_kt = MAP.cols();
 
     Eigen::MatrixXd SumXY = Eigen::MatrixXd::Zero(p, p);
     Eigen::MatrixXd N = Eigen::MatrixXd::Zero(p, p);
@@ -114,8 +115,25 @@ Eigen::MatrixXd covCalc(const Eigen::MatrixXd & X, const Eigen::MatrixXi & MAP, 
         // 1. Collect non-zero indices to skip the vast majority of the empty matrix
         std::vector<int> active;
         active.reserve(p);
-        for(int c = 0; c < p; ++c) {
-            if(MAP(i, c) != 0) active.push_back(c);
+        // DYNAMIC MASKING: Prevent Out-of-Bounds Memory Reads
+        if (p == full_kt) {
+            // Phase 1: Residual Covariance (X is n x kt)
+            for(int c = 0; c < p; ++c) {
+                if(MAP(i, c) != 0) active.push_back(c);
+            }
+        } else {
+            // Phase 2: Random Effects Covariance (X is n x 2k)
+            int timepts = full_kt / (p / 2);
+            for(int c = 0; c < p; ++c) {
+                int node = c / 2; // Map slope/intercept back to the node
+                bool has_data = false;
+                for(int time = 0; time < timepts; ++time) {
+                    if(MAP(i, node * timepts + time) != 0) {
+                        has_data = true; break;
+                    }
+                }
+                if(has_data) active.push_back(c);
+            }
         }
 
         // 2. Only loop over active observation pairs!
@@ -162,6 +180,8 @@ void get_cov_stats(const Eigen::Ref<const Eigen::MatrixXd>& R,
                    Eigen::MatrixXd& SumX_shared, Eigen::MatrixXd& SumRsq)
 {
     int p = R.cols();
+    int full_kt = MAP.cols();
+
     SumXY.setZero(p, p);
     N.setZero(p, p);
     SumX_shared.setZero(p, p);
@@ -172,8 +192,23 @@ void get_cov_stats(const Eigen::Ref<const Eigen::MatrixXd>& R,
         // 1. Find active nodes for this subject
         std::vector<int> active;
         active.reserve(p);
-        for(int c = 0; c < p; ++c) {
-            if(MAP(row_idx, c) != 0) active.push_back(c);
+        // SAFE MAPPING
+        if (p == full_kt) {
+            for(int c = 0; c < p; ++c) {
+                if(MAP(row_idx, c) != 0) active.push_back(c);
+            }
+        } else {
+            int timepts = full_kt / (p / 2);
+            for(int c = 0; c < p; ++c) {
+                int node = c / 2;
+                bool has_data = false;
+                for(int time = 0; time < timepts; ++time) {
+                    if(MAP(row_idx, node * timepts + time) != 0) {
+                        has_data = true; break;
+                    }
+                }
+                if(has_data) active.push_back(c);
+            }
         }
 
         // 2. Accumulate raw sums for the active pairs
@@ -655,6 +690,7 @@ Eigen::MatrixXd RtR(const Eigen::MatrixXd & R, const Eigen::MatrixXi & MAP)
 {
     int n = R.rows();
     int p = R.cols();
+    int full_kt = MAP.cols();
 
     Eigen::MatrixXd SumRsq = Eigen::MatrixXd::Zero(p, p);
     Eigen::MatrixXd N = Eigen::MatrixXd::Zero(p, p);
@@ -663,8 +699,23 @@ Eigen::MatrixXd RtR(const Eigen::MatrixXd & R, const Eigen::MatrixXi & MAP)
     {
         std::vector<int> active;
         active.reserve(p);
-        for(int c = 0; c < p; ++c) {
-            if(MAP(i, c) != 0) active.push_back(c);
+        // SAFE MAPPING
+        if (p == full_kt) {
+            for(int c = 0; c < p; ++c) {
+                if(MAP(i, c) != 0) active.push_back(c);
+            }
+        } else {
+            int timepts = full_kt / (p / 2);
+            for(int c = 0; c < p; ++c) {
+                int node = c / 2;
+                bool has_data = false;
+                for(int time = 0; time < timepts; ++time) {
+                    if(MAP(i, node * timepts + time) != 0) {
+                        has_data = true; break;
+                    }
+                }
+                if(has_data) active.push_back(c);
+            }
         }
 
         for(size_t idx1 = 0; idx1 < active.size(); ++idx1)
