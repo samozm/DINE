@@ -541,14 +541,12 @@ int a2_initial_estimates(const Eigen::Ref<const Eigen::MatrixXd> & X,
     // Math Geometry: Total columns = Intercept(1) + Dummies(k-1) + Covariates(p_cov-1)
     int p_cov = X.cols();
     int q = k + p_cov - 1; 
-    int nkt = MAP.rowwise().sum().sum();
-    r.setZero(nkt);
 
     Eigen::MatrixXd XtX = Eigen::MatrixXd::Zero(q, q);
     Eigen::VectorXd Xty = Eigen::VectorXd::Zero(q);
     Eigen::VectorXi kt_vec = MAP.rowwise().sum();
     Eigen::MatrixXd R = Eigen::MatrixXd::Zero(n, k * t);
-
+    
     // --- THE ASSEMBLY LAMBDA ---
     // This captures the necessary variables and builds Xi for subject i
     auto assemble_Xi = [&](int i, int kt, Eigen::MatrixXd& Xi_out) {
@@ -567,7 +565,7 @@ int a2_initial_estimates(const Eigen::Ref<const Eigen::MatrixXd> & X,
     };
 
     // PASS 1: Accumulate XtX and Xty
-    nkt = 0;
+    int nkt = 0;
     Eigen::MatrixXd Xi_buf; 
     for(int i = 0; i < n; ++i) {
         int kt = kt_vec(i);
