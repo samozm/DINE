@@ -572,12 +572,11 @@ void estimate_beta2(const Eigen::Ref<const Eigen::MatrixXd> & X_visit,
     Eigen::MatrixXd Zi, Xi, ZiX, M;
     Eigen::VectorXd yi, E_inv, Ziy;
     int cnt = 0;
-    Eigen::MatrixXd Xi_buffer(k * t, q);
-    Eigen::VectorXd E_inv_buffer(k * t);
+    
     for(int i = 0; i < n; ++i)
     {
         int kt = kt_vec(i);
-        if(kt == 0) continue;
+        
         // Get Z for this subject
         Z_assemble_IP(Z, Zi, MAP, i, k, t, kt);
         
@@ -594,36 +593,28 @@ void estimate_beta2(const Eigen::Ref<const Eigen::MatrixXd> & X_visit,
                 int node = j / t;       // Which OTU is this? (0 to k-1)
                 int time_idx = j % t;   // Which timepoint is this? (0 to t-1)
                 int visit_row = i * t + time_idx; // Exact O(1) grid lookup in X_visit
-
-                // We MUST manually zero out the dummy block because we are reusing the buffer!
-                for(int c = 1; c < k; ++c) Xi_buffer(local_row, c) = 0.0;
                 
                 // A. Insert Intercept
-                Xi_buffer(local_row, 0) = X_visit(visit_row, 0);
+                Xi(local_row, 0) = X_visit(visit_row, 0);
                 
                 // B. Insert the ONE active OTU Dummy (if not the reference node)
                 if(node > 0) {
-                    Xi_buffer(local_row, node) = 1.0; 
+                    Xi(local_row, node) = 1.0; 
                 }
                 
                 // C. Insert the Dense Covariates
                 for(int c = 1; c < p_cov; ++c) {
-                    Xi_buffer(local_row, k - 1 + c) = X_visit(visit_row, c);
+                    Xi(local_row, k - 1 + c) = X_visit(visit_row, c);
                 }
                 
-                E_inv_buffer(local_row) = 1.0 / std::max(E(node), 1e-8);
+                E_inv(local_row) = 1.0 / std::max(E(node), 1e-8);
                 local_row++;
             }
         }
-
-        // Zero-cost pointer views of our exact data size
-        Eigen::Block<Eigen::MatrixXd> Xi_view = Xi_buffer.topRows(kt);
-        Eigen::VectorBlock<Eigen::VectorXd> E_inv_view = E_inv_buffer.head(kt);
-
         yi = y.segment(cnt, kt);
         
         // The Woodbury Transformation Variables
-        Eigen::MatrixXd X_tilde = E_inv.asDiagonal() * Xi_view;
+        Eigen::MatrixXd X_tilde = E_inv.asDiagonal() * Xi;
         Eigen::VectorXd y_tilde = E_inv.asDiagonal() * yi;
         
         // Accumulate the base E^-1 terms
