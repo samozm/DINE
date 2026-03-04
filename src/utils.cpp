@@ -415,7 +415,7 @@ Eigen::MatrixXd Z_assemble(const Eigen::MatrixXd & masterZ,
 }
 
 void Et_assemble_IP(const Eigen::Ref<const Eigen::VectorXd> & E, 
-                    Eigen::VectorXd & Et,
+                    Eigen::Ref<Eigen::MatrixXd> Et,
                     const Eigen::Ref<const Eigen::MatrixXi> & MAP, 
                     int i, int k, int t, int kt)
 {
@@ -436,28 +436,11 @@ void Et_assemble_IP(const Eigen::Ref<const Eigen::VectorXd> & E,
     }
 }
 
-void Et_diag_assemble(const Eigen::Ref<const Eigen::VectorXd> & E, 
-                     Eigen::VectorXd & Et_diag, 
-                     const Eigen::Ref<const Eigen::MatrixXi> & MAP, 
-                     int i, int k, int t, int kt)
-{
-    Et_diag.resize(kt);
-    int local_row = 0;
-    for(int j = 0; j < k * t; ++j) {
-        if(MAP(i, j) == 1) {
-            int node = j / t;
-            Et_diag(local_row) = E(node);
-            local_row++;
-        }
-    }
-}
-
 void Z_assemble_IP(const Eigen::Ref<const Eigen::MatrixXd> & masterZ, 
-                   Eigen::MatrixXd & Z_out, 
+                   Eigen::Ref<Eigen::MatrixXd> Z_out, 
                    const Eigen::Ref<const Eigen::MatrixXi> & MAP,
                    int i, int k, int t, int kt)
 {
-    Z_out.resize(kt, masterZ.cols());
     int cnt = 0;
     for(int j = 0; j<k*t; ++j)
     {
@@ -583,63 +566,90 @@ void estimate_beta2(const Eigen::Ref<const Eigen::MatrixXd> & X_visit,
         D_inv = D_safe.completeOrthogonalDecomposition().pseudoInverse();
     }
 
-    Eigen::MatrixXd Xi, Zi, M;
-    Eigen::VectorXd yi, E_inv;
+    Eigen::MatrixXd Xi_buffer(k * t, q);
+    Eigen::MatrixXd X_tilde_buffer(k * t, q);
+    Eigen::MatrixXd ZiX_buffer(2 * k, q);
+    Eigen::VectorXd E_inv_buffer(k * t);
+    Eigen::VectorXd y_tilde_buffer(k * t);
+    Eigen::VectorXd Ziy_buffer(2 * k);
+    Eigen::MatrixXd Zi(k*t,2*k), M;
+    Eigen::VectorXd yi;
     int cnt = 0;
     for(int i = 0; i < n; ++i)
     {
         int kt = kt_vec(i);
         if(kt == 0) continue;
         // Get Z for this subject
-        Z_assemble_IP(Z, Zi, MAP, i, k, t, kt);
-        Xi = Eigen::MatrixXd::Zero(kt, q); // Contiguous L1 memory!
-        E_inv.resize(kt);
+        Eigen::Block<Eigen::MatrixXd> Zi_view = Zi.topLeftCorner(kt, 2*k);
+        Z_assemble_IP(Z, Zi_view, MAP, i, k, t, kt);
+        
+        // 1. DYNAMIC L1 CACHE BUILDER
+        // We construct Xi on the fly instead of reading it from massive RAM!
+        Xi_buffer.topRows(kt).setZero();
         
         int local_row = 0;
-        for(int j = 0; j < k * t; ++j) {
-            if(MAP(i, j) == 1) {
-                int node = j / t;       
-                int time_idx = j % t;   
-                int visit_row = i * t + time_idx; 
+        for(int j = 0; j < k * t; ++j) 
+        {
+            if(MAP(i, j) == 1) 
+            {
+                int node = j / t;       // Which OTU is this? (0 to k-1)
+                int time_idx = j % t;   // Which timepoint is this? (0 to t-1)
+                int visit_row = i * t + time_idx; // Exact O(1) grid lookup in X_visit
                 
-                Xi(local_row, 0) = X_visit(visit_row, 0);
-                if(node > 0) Xi(local_row, node) = 1.0; 
-                for(int c = 1; c < p_cov; ++c) Xi(local_row, k - 1 + c) = X_visit(visit_row, c);
+                // A. Insert Intercept
+                Xi_buffer(local_row, 0) = X_visit(visit_row, 0);
                 
-                E_inv(local_row) = 1.0 / std::max(E(node), 1e-8);
+                // B. Insert the ONE active OTU Dummy (if not the reference node)
+                if(node > 0) {
+                    Xi_buffer(local_row, node) = 1.0; 
+                }
+                
+                // C. Insert the Dense Covariates
+                for(int c = 1; c < p_cov; ++c) {
+                    Xi_buffer(local_row, k - 1 + c) = X_visit(visit_row, c);
+                }
+                
+                E_inv_buffer(local_row) = 1.0 / std::max(E(node), 1e-8);
                 local_row++;
             }
         }
 
+        // Zero-cost pointer views of our exact data size
+        Eigen::Block<Eigen::MatrixXd> Xi_view = Xi_buffer.topRows(kt);
+        Eigen::VectorBlock<Eigen::VectorXd> E_inv_view = E_inv_buffer.head(kt);
+        Eigen::Block<Eigen::MatrixXd> X_tilde_view = X_tilde_buffer.topRows(kt);
+        Eigen::Block<Eigen::MatrixXd> ZiX_view = ZiX_buffer.topRows(2*k);
+        Eigen::VectorBlock<Eigen::VectorXd> y_tilde_view = y_tilde_buffer.head(kt);
+
         yi = y.segment(cnt, kt);
         
         // The Woodbury Transformation Variables
-        Eigen::MatrixXd X_tilde = E_inv.asDiagonal() * Xi;
-        Eigen::VectorXd y_tilde = E_inv.asDiagonal() * yi;
+        X_tilde_view.noalias() = E_inv_view.asDiagonal() * Xi_view;
+        y_tilde_view.noalias() = E_inv_view.asDiagonal() * yi;
         
         // Accumulate the base E^-1 terms
-        XVX.noalias() += Xi.transpose() * X_tilde;
-        XVy.noalias() += Xi.transpose() * y_tilde;
+        XVX.noalias() += Xi_view.transpose() * X_tilde_view;
+        XVy.noalias() += Xi_view.transpose() * y_tilde_view;
         
         // Inner Woodbury components
-        Eigen::MatrixXd ZiX = Zi.transpose() * X_tilde;  
-        Eigen::VectorXd Ziy = Zi.transpose() * y_tilde;
+        ZiX_view.noalias() = Zi_view.transpose() * X_tilde_view;  
+        Ziy_buffer.noalias() = Zi_view.transpose() * y_tilde_view;
         
         // Inner matrix M = D^-1 + Z^T * E^-1 * Z  (Always exactly 2k x 2k)
-        M = D_inv + Zi.transpose() * E_inv.asDiagonal() * Zi; 
+        M = D_inv + Zi_view.transpose() * E_inv_view.asDiagonal() * Zi_view; 
         
         // Fast 2k x 2k decomposition
         Eigen::LDLT<Eigen::MatrixXd> ldlt_M(M);
         if(ldlt_M.info() == Eigen::Success)
         {
-            XVX.noalias() -= ZiX.transpose() * ldlt_M.solve(ZiX);
-            XVy.noalias() -= ZiX.transpose() * ldlt_M.solve(Ziy);
+            XVX.noalias() -= ZiX_view.transpose() * ldlt_M.solve(ZiX_view);
+            XVy.noalias() -= ZiX_view.transpose() * ldlt_M.solve(Ziy_buffer);
         }
         else
         {
             Eigen::MatrixXd M_inv = M.completeOrthogonalDecomposition().pseudoInverse();
-            XVX.noalias() -= ZiX.transpose() * M_inv * ZiX;
-            XVy.noalias() -= ZiX.transpose() * M_inv * Ziy;
+            XVX.noalias() -= ZiX_view.transpose() * M_inv * ZiX_view;
+            XVy.noalias() -= ZiX_view.transpose() * M_inv * Ziy_buffer;
         }
         
         cnt += kt;
