@@ -181,9 +181,9 @@ void calc_e(const Eigen::Ref<const Eigen::VectorXd> & r0,
 
         Z_assemble_IP(Z,Zi_view,MAP,i,k,t,kt);
         ZiT = Zi_view.transpose();
-        B.noalias() += ZiT * Zi_view;
+        B.noalias() += ZiT * Zi;
         Et_assemble_IP(E, Et_view, MAP, i, k, t, kt);//Z[i];
-        EZ_view.noalias() = Et_view*Zi_view;
+        EZ_view.noalias() = Et_view*Zi;
         ZEEZ.noalias() += EZ_view.transpose() * EZ_tmp;
         Zr.noalias() += ZiT * r0.segment(cnt,kt);
         cnt += kt;
@@ -216,10 +216,10 @@ void calc_e(const Eigen::Ref<const Eigen::VectorXd> & r0,
     for(int i=0;i<n;++i)
     {
         int kt = kt_vec(i);
-        Eigen::Block<Eigen::MatrixXd> Zi_view = Zi.topLeftCorner(kt, p);
-        Eigen::Block<Eigen::MatrixXd> Et_view = Et.topLeftCorner(kt, kt);
-        Eigen::Block<Eigen::MatrixXd> EZ_view = EZ_tmp.topLeftCorner(kt, p);
-        Eigen::VectorBlock<Eigen::VectorXd>  tmp_view = tmp_kt.head(kt);
+        Eigen::MatrixXd Zi_view = Zi.topLeftCorner(kt, p);
+        Eigen::MatrixXd Et_view = Et.topLeftCorner(kt, kt);
+        Eigen::MatrixXd EZ_view = EZ_tmp.topLeftCorner(kt, p);
+        Eigen::VectorXd tmp_view = tmp_kt.head(kt);
         
         Et_assemble_IP(E, Et_view, MAP, i, k, t, kt);
         Z_assemble_IP(Z,Zi_view,MAP,i,k,t,kt);
@@ -667,32 +667,13 @@ int a2_initial_estimates(const Eigen::Ref<const Eigen::MatrixXd> & X,
     Eigen::MatrixXd ZCZ = Eigen::MatrixXd::Zero(2*k,2*k);
     Eigen::VectorXi kt_vec = MAP.rowwise().sum();
     Eigen::MatrixXd Zi(k*t,2*k);
-    Eigen::MatrixXd cov_int_sub(k*t,k*t);
     for(int i=0; i<n;++i)
     {
         int kt = kt_vec(i);
-        Eigen::Block<Eigen::MatrixXd> Zi_view = Zi.topLeftCorner(kt, 2*k);
-        Z_assemble_IP(Z, Zi_view, MAP, i, k, t, kt);
-        B += Zi_view.transpose() * Zi_view;
-        // Safely subset the covariance matrix for THIS subject's valid timepoints
-        Eigen::Block<Eigen::MatrixXd> cov_sub_view = cov_int_sub.topLeftCorner(kt, kt);
-        int r_idx = 0;
-        for(int r = 0; r < k * t; ++r) {
-            if(MAP(i, r) == 1) {
-                int c_idx = 0;
-                for(int c = 0; c < k * t; ++c) {
-                    if(MAP(i, c) == 1) {
-                        cov_sub_view(r_idx, c_idx) = cov_int(r, c);
-                        c_idx++;
-                    }
-                }
-                r_idx++;
-            }
-        }
-        ZCZ += Zi_view.transpose() * cov_int * Zi_view;
+        Z_assemble_IP(Z,Zi,MAP,i,k,t,kt);
+        B += Zi.transpose() * Zi;
+        ZCZ += Zi.transpose() * cov_int * Zi;
     }
-    // Safety Ridge: Prevent B from ever being singular
-    B.diagonal().array() += 1e-6;
     // 1. Solve the first half: M = B^-1 * ZCZ
     Eigen::MatrixXd M = B.ldlt().solve(ZCZ);
     
