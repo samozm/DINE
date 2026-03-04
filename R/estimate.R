@@ -1,47 +1,47 @@
-  #' @useDynLib DINE, .registration = TRUE
-  #' @importFrom Rcpp sourceCpp
-  #' @importFrom Rcpp evalCpp
-  NULL
+#' @useDynLib DINE, .registration = TRUE
+#' @importFrom Rcpp sourceCpp
+#' @importFrom Rcpp evalCpp
+NULL
 
 
-  #' Run DINE algorithm 1 or 2
-  #' @param X fixed effect matrix - should be in order all times for node 1 for subject 1, all times for node 2 for subject 1, and so on
-  #' @param y response vector - same order as X
-  #' @param Z list of matrices - one random effect matrix per subject. REMOVED FOR SPACE REASONS. should have form 
-  #' [intercept time 1 0 ... ... 0] <- node 1
-  #' [intercept time 2 0 ... ... 0] <- node 1
-  #' [............................] <- node 1
-  #' [0 0 intercept time 1 0 ... 0] <- node 2
-  #' @param n0 Integer. total number of subjects
-  #' @param k0 Integer. total number of nodes 
-  #' @param t0 Integer. total number of timepoints
-  #' @param algo (optional) default value 2. 1 or 2. which algorithm to run
-  #' @param max_itr (optional) Integer. default value 100 Integer. maximum number of iterations to run the algorithms
-  #' @param convergence_cutoff (optional) default value 5*10^-5. Double. relative difference in parameters used to determine algorithm convergence
-  #' @param REML (optional) Boolean. default value FALSE. Boolean. whether or not to use restricted ML for fitting in algorithm 2
-  #' @param verbose (optional) Boolean. default value FALSE. Boolean. For algo 2, prints current and previous D, E, and beta values at each iteration
-  #' @param timings (optional) Boolean. default value FALSE. Boolean. Whether or not to print the time each fitting takes for each iteration
-  #' @param n_fold (optional) Integer. default value 5 Integer. Number of cross-validation fits to use to fit lambda for algorithm 2
-  #' @param n_threads (optional) Integer. default value 1 Integer. Number of threads to use for loops. Set to 1 if you're running estimate in parallel already
-  #' @param threshold (optional) Matrix. default value NA Matrix of pre-computed thresholds to use for fitting D
-  #' @return A named list containing: 
-  #' \itemize{
-  #'   \item \code{E}: The diagonal residual variance matrix.
-  #'   \item \code{D}: The thresholded random effects covariance matrix.
-  #'   \item \code{V}: The final composite covariance matrix.
-  #'   \item \code{beta}: The final fixed-effects coefficient vector.
-  #'   \item \code{timelength}: The amount of time the algorithm took to run
-  #'   \item \code{converged}: Logical indicating if the algorithm reached \code{convergence_cutoff} before \code{max_itr}.
-  #'   \item \code{sigma}: The estimated scaling variance parameter for algorithm 2. NA for algorithm 1
-  #'   \item \code{n_iter}: The total number of iterations run.
-  #'   \item \code{all_err}: Vector of convergence errors across all iterations.
-  #'   \item \code{MAP}: Integer matrix, n x kt describing which node/timepoint combinations each subject has
-  #'   \item \code{V_nonzeros_pct}: For algorithm 1, percentage of cells in the overall covariance V matrix that are zeros. NA for algorithm 2
-  #'   \item \code{threshold}: The final threshold matrix selected by cross-validation for algoritm 2. NA for algorithm 1.
-  #' }
-  #' @export  
-  estimate <- function(X,y,Z,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(10^(-5)),REML=FALSE,verbose=FALSE,timings=FALSE,n_fold=5,n_threads=1,threshold=NA)
-  {
+#' Run DINE algorithm 1 or 2
+#' @param X fixed effect matrix - should be in order all times for node 1 for subject 1, all times for node 2 for subject 1, and so on
+#' @param y response vector - same order as X
+#' @param Z list of matrices - one random effect matrix per subject. REMOVED FOR SPACE REASONS. should have form 
+#' [intercept time 1 0 ... ... 0] <- node 1
+#' [intercept time 2 0 ... ... 0] <- node 1
+#' [............................] <- node 1
+#' [0 0 intercept time 1 0 ... 0] <- node 2
+#' @param n0 Integer. total number of subjects
+#' @param k0 Integer. total number of nodes 
+#' @param t0 Integer. total number of timepoints
+#' @param algo (optional) default value 2. 1 or 2. which algorithm to run
+#' @param max_itr (optional) Integer. default value 100 Integer. maximum number of iterations to run the algorithms
+#' @param convergence_cutoff (optional) default value 5*10^-5. Double. relative difference in parameters used to determine algorithm convergence
+#' @param REML (optional) Boolean. default value FALSE. Boolean. whether or not to use restricted ML for fitting in algorithm 2
+#' @param verbose (optional) Boolean. default value FALSE. Boolean. For algo 2, prints current and previous D, E, and beta values at each iteration
+#' @param timings (optional) Boolean. default value FALSE. Boolean. Whether or not to print the time each fitting takes for each iteration
+#' @param n_fold (optional) Integer. default value 5 Integer. Number of cross-validation fits to use to fit lambda for algorithm 2
+#' @param n_threads (optional) Integer. default value 1 Integer. Number of threads to use for loops. Set to 1 if you're running estimate in parallel already
+#' @param threshold (optional) Matrix. default value NA Matrix of pre-computed thresholds to use for fitting D
+#' @return A named list containing: 
+#' \itemize{
+#'   \item \code{E}: The diagonal residual variance matrix.
+#'   \item \code{D}: The thresholded random effects covariance matrix.
+#'   \item \code{V}: The final composite covariance matrix.
+#'   \item \code{beta}: The final fixed-effects coefficient vector.
+#'   \item \code{timelength}: The amount of time the algorithm took to run
+#'   \item \code{converged}: Logical indicating if the algorithm reached \code{convergence_cutoff} before \code{max_itr}.
+#'   \item \code{sigma}: The estimated scaling variance parameter for algorithm 2. NA for algorithm 1
+#'   \item \code{n_iter}: The total number of iterations run.
+#'   \item \code{all_err}: Vector of convergence errors across all iterations.
+#'   \item \code{MAP}: Integer matrix, n x kt describing which node/timepoint combinations each subject has
+#'   \item \code{V_nonzeros_pct}: For algorithm 1, percentage of cells in the overall covariance V matrix that are zeros. NA for algorithm 2
+#'   \item \code{threshold}: The final threshold matrix selected by cross-validation for algoritm 2. NA for algorithm 1.
+#' }
+#' @export  
+estimate <- function(X,y,Z,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(10^(-5)),REML=FALSE,verbose=FALSE,timings=FALSE,n_fold=5,n_threads=1,threshold=NA)
+{
   startTime <- proc.time()
   V_nonzeros_pct = 0
   if(algo==2)
@@ -71,7 +71,7 @@
     sigma <- 0
     V_nonzeros_pct <- res$V_nonzeros_pct
   }
-
+  
   exeTimeClass <- proc.time() - startTime
   exeTime <- as.numeric(exeTimeClass[3])
   timelength <- exeTime
@@ -80,42 +80,42 @@
               all_err=res$all_err,MAP=res$MAP,
               V_nonzeros_pct=V_nonzeros_pct,
               threshold=threshold))#,Sigma=V))
-  }
+}
 
-  #' Run DINE algorithm 1 or 2
-  #' @param X fixed effect matrix - should be in order all times for node 1 for subject 1, all times for node 2 for subject 1, and so on
-  #' @param y response vector - same order as X
-  #' @param masterZ overall random effect matrix for all timepoints across all subjects. Can be generated by build_map_and_masterZ
-  #' @param MAP Integer matrix, n x kt describing which node/timepoint combinations each subject has. Can be generated by build_map_and_masterZ
-  #' @param n0 Integer. total number of subjects
-  #' @param k0 Integer. total number of nodes 
-  #' @param t0 Integer. total number of timepoints
-  #' @param algo (optional) default value 2. 1 or 2. which algorithm to run
-  #' @param max_itr (optional) Integer. default value 100 Integer. maximum number of iterations to run the algorithms
-  #' @param convergence_cutoff (optional) default value 5*10^-5. Double. relative difference in parameters used to determine algorithm convergence
-  #' @param REML (optional) Boolean. default value FALSE. Boolean. whether or not to use restricted ML for fitting in algorithm 2
-  #' @param verbose (optional) Boolean. default value FALSE. Boolean. For algo 2, prints current and previous D, E, and beta values at each iteration
-  #' @param timings (optional) Boolean. default value FALSE. Boolean. Whether or not to print the time each fitting takes for each iteration
-  #' @param n_fold (optional) Integer. default value 5 Integer. Number of cross-validation fits to use to fit lambda for algorithm 2
-  #' @param n_threads (optional) Integer. default value 1 Integer. Number of threads to use for loops. Set to 1 if you're running estimate in parallel already
-  #' @param threshold (optional) Matrix. default value NA Matrix of pre-computed thresholds to use for fitting D
-  #' @return A named list containing: 
-  #' \itemize{
-  #'   \item \code{E}: The diagonal residual variance matrix.
-  #'   \item \code{D}: The thresholded random effects covariance matrix.
-  #'   \item \code{V}: The final composite covariance matrix.
-  #'   \item \code{beta}: The final fixed-effects coefficient vector.
-  #'   \item \code{timelength}: The amount of time the algorithm took to run
-  #'   \item \code{converged}: Logical indicating if the algorithm reached \code{convergence_cutoff} before \code{max_itr}.
-  #'   \item \code{sigma}: The estimated scaling variance parameter for algorithm 2. NA for algorithm 1
-  #'   \item \code{n_iter}: The total number of iterations run.
-  #'   \item \code{all_err}: Vector of convergence errors across all iterations.
-  #'   \item \code{V_nonzeros_pct}: For algorithm 1, percentage of cells in the overall covariance V matrix that are zeros. NA for algorithm 2
-  #'   \item \code{threshold}: The final threshold matrix selected by cross-validation for algoritm 2. NA for algorithm 1.
-  #' }
-  #' @export
-  estimate_masterZ <- function(X,y,masterZ,MAP,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(10^(-5)),REML=FALSE,verbose=FALSE,timings=FALSE,n_fold=5,n_threads=1,threshold=NA)
-  {
+#' Run DINE algorithm 1 or 2
+#' @param X fixed effect matrix - should be in order all times for node 1 for subject 1, all times for node 2 for subject 1, and so on
+#' @param y response vector - same order as X
+#' @param masterZ overall random effect matrix for all timepoints across all subjects. Can be generated by build_map_and_masterZ
+#' @param MAP Integer matrix, n x kt describing which node/timepoint combinations each subject has. Can be generated by build_map_and_masterZ
+#' @param n0 Integer. total number of subjects
+#' @param k0 Integer. total number of nodes 
+#' @param t0 Integer. total number of timepoints
+#' @param algo (optional) default value 2. 1 or 2. which algorithm to run
+#' @param max_itr (optional) Integer. default value 100 Integer. maximum number of iterations to run the algorithms
+#' @param convergence_cutoff (optional) default value 5*10^-5. Double. relative difference in parameters used to determine algorithm convergence
+#' @param REML (optional) Boolean. default value FALSE. Boolean. whether or not to use restricted ML for fitting in algorithm 2
+#' @param verbose (optional) Boolean. default value FALSE. Boolean. For algo 2, prints current and previous D, E, and beta values at each iteration
+#' @param timings (optional) Boolean. default value FALSE. Boolean. Whether or not to print the time each fitting takes for each iteration
+#' @param n_fold (optional) Integer. default value 5 Integer. Number of cross-validation fits to use to fit lambda for algorithm 2
+#' @param n_threads (optional) Integer. default value 1 Integer. Number of threads to use for loops. Set to 1 if you're running estimate in parallel already
+#' @param threshold (optional) Matrix. default value NA Matrix of pre-computed thresholds to use for fitting D
+#' @return A named list containing: 
+#' \itemize{
+#'   \item \code{E}: The diagonal residual variance matrix.
+#'   \item \code{D}: The thresholded random effects covariance matrix.
+#'   \item \code{V}: The final composite covariance matrix.
+#'   \item \code{beta}: The final fixed-effects coefficient vector.
+#'   \item \code{timelength}: The amount of time the algorithm took to run
+#'   \item \code{converged}: Logical indicating if the algorithm reached \code{convergence_cutoff} before \code{max_itr}.
+#'   \item \code{sigma}: The estimated scaling variance parameter for algorithm 2. NA for algorithm 1
+#'   \item \code{n_iter}: The total number of iterations run.
+#'   \item \code{all_err}: Vector of convergence errors across all iterations.
+#'   \item \code{V_nonzeros_pct}: For algorithm 1, percentage of cells in the overall covariance V matrix that are zeros. NA for algorithm 2
+#'   \item \code{threshold}: The final threshold matrix selected by cross-validation for algoritm 2. NA for algorithm 1.
+#' }
+#' @export
+estimate_masterZ <- function(X,y,masterZ,MAP,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(10^(-5)),REML=FALSE,verbose=FALSE,timings=FALSE,n_fold=5,n_threads=1,threshold=NA)
+{
   startTime <- proc.time()
   V_nonzeros_pct = 0
   if(algo==2)
@@ -135,7 +135,7 @@
   {
     print("not implemented for algo 1 yet")
   }
-
+  
   exeTimeClass <- proc.time() - startTime
   exeTime <- as.numeric(exeTimeClass[3])
   timelength <- exeTime
@@ -144,17 +144,17 @@
               all_err=res$all_err,MAP=res$MAP,
               V_nonzeros_pct=V_nonzeros_pct,
               threshold=res$threshold))#,Sigma=V))
-  }
+}
 
-  #' Build MAP and masterZ matrices for DINE
-  #' 
-  #' @param Z_in List of N matrices, each with 2*K columns.
-  #' @return A list containing the masterZ matrix and the MAP matrix, k (number of nodes) and t (number of timepoints).
-  #' @export
-  build_map_and_masterZ <- function(Z_in) {
+#' Build MAP and masterZ matrices for DINE
+#' 
+#' @param Z_in List of N matrices, each with 2*K columns.
+#' @return A list containing the masterZ matrix and the MAP matrix, k (number of nodes) and t (number of timepoints).
+#' @export
+build_map_and_masterZ <- function(Z_in) {
   n <- length(Z_in)
   k <- ncol(Z_in[[1]]) / 2
-
+  
   # 1. Extract all valid times across all subjects and nodes
   all_times <- unlist(lapply(Z_in, function(Zi) {
     valid_times <- unlist(lapply(1:k, function(l) {
@@ -165,16 +165,16 @@
     }))
     return(valid_times)
   }))
-
+  
   # Get unique, sorted times
   times <- sort(unique(all_times))
   t <- length(times)
-
+  
   if (length(times) != t) {
     warning(sprintf("Expected %d unique times, but found %d.", t, length(times)))
     t <- length(times)
   }
-
+  
   # 2. Build masterZ (size: k*t by 2k)
   masterZ <- matrix(0.0, nrow = k * t, ncol = 2 * k)
   for (l in 1:k) {
@@ -182,10 +182,10 @@
     masterZ[row_seq, 2 * l - 1] <- 1.0
     masterZ[row_seq, 2 * l]     <- times
   }
-
+  
   # 3. Build MAP (size: n by k*t)
   MAP <- matrix(0L, nrow = n, ncol = k * t)
-
+  
   for (i in 1:n) {
     Zi <- Z_in[[i]]
     for (l in 1:k) {
@@ -210,86 +210,6 @@
       }
     }
   }
-
+  
   return(list(masterZ = masterZ, MAP = MAP, k=k, t=t))
-  }
-
-#' Fit the DINE model on a subset of data using the compressed Visit-Level Grid
-#'
-#' @param X_visit Numeric matrix of visit-level covariates (N * T0 rows).
-#' @param y Numeric vector of valid responses.
-#' @param masterZ Numeric matrix generated by build_map_and_masterZ.
-#' @param MAP Integer matrix generated by build_map_and_masterZ.
-#' @param k Integer. Number of nodes.
-#' @param t Integer. Number of time points (T0).
-#' @param subs Integer vector of subject indices to run the model on. If NULL, runs on all.
-#' @param theta Initial threshold matrix.
-#' @param ... Additional arguments passed to the C++ engine.
-#' @return A formatted list of estimated model parameters.
-#' @export
-fit_dine_subset <- function(X_visit, y, masterZ, MAP, k, t, theta, subs = NULL, ...) {
-
-  if (!is.null(subs)) {
-    # 1. Subset the N x T Visit Grid (X_visit)
-    # Every subject has exactly 't' rows in this matrix
-    visit_indices <- unlist(lapply(subs, function(s) {
-      ((s - 1) * t + 1):(s * t)
-    }))
-    X_visit_run <- X_visit[visit_indices, , drop = FALSE]
-    
-    # 2. Subset the Observation Vector (y)
-    # Count how many valid observations each subject actually has
-    kt_counts <- rowSums(MAP)
-    
-    # Create a vector mapping every element in 'y' to its Subject ID
-    obs_subject_ids <- rep(1:nrow(MAP), times = kt_counts)
-    
-    # Find the exact indices in 'y' for the requested subjects
-    obs_indices <- which(obs_subject_ids %in% subs)
-    y_run <- y[obs_indices]
-    
-    # 3. Subset MAP (Subject Level)
-    MAP_run <- MAP[subs, , drop = FALSE]
-    n_run   <- length(subs)
-    
-  } else {
-    X_visit_run <- X_visit
-    y_run       <- y
-    MAP_run     <- MAP
-    n_run       <- nrow(MAP)
-  }
-
-  # 4. Call the optimized C++ backend
-  raw_results <- estimate_DEbeta(X_visit = X_visit_run, y = y_run, 
-                                  masterZ = masterZ, MAP = MAP_run, 
-                                  n = n_run, k = k, t = t, 
-                                  theta = theta, ...)
-
-  # 5. Map Dimensions and Reconstruct Labels
-  # Because C++ dynamically builds the 156-column math block, we must rebuild the labels!
-
-  # A. Beta Labels: Intercept + (K-1) Dummies + Covariates
-  cov_names <- colnames(X_visit)
-  intercept_name <- cov_names[1] # Usually "(Intercept)"
-  dense_covs <- cov_names[-1]    # Age, Race, Sex, etc.
-
-  dummy_names <- paste0("Node_", 2:k) # Node 1 is the reference
-
-  beta_labels <- c(intercept_name, dummy_names, dense_covs)
-  rownames(raw_results$beta) <- beta_labels
-
-  # B. D Matrix Labels (Random Effects Covariance: 2K x 2K)
-  re_labels <- paste0(rep(paste0("Node_", 1:k), each = 2), c("_Int", "_Slope"))
-  rownames(raw_results$D) <- re_labels
-  colnames(raw_results$D) <- re_labels
-
-  # C. E Matrix Labels (Residual Variance: K x K)
-  node_labels <- paste0("Node_", 1:k)
-  rownames(raw_results$E) <- node_labels
-  colnames(raw_results$E) <- node_labels
-
-  # D. Add tracking info
-  raw_results$subset_used <- if(!is.null(subs)) subs else 1:n_run
-
-  return(raw_results)
 }

@@ -542,7 +542,7 @@ void estimate_beta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
     }
 }
 
-void estimate_beta2(const Eigen::Ref<const Eigen::MatrixXd> & X_visit, 
+void estimate_beta2(const Eigen::Ref<const Eigen::MatrixXd> & X, 
                     const Eigen::Ref<const Eigen::VectorXd> & y, 
                     const Eigen::Ref<const Eigen::MatrixXd> & Z,
                     const Eigen::Ref<const Eigen::MatrixXd> & D,
@@ -552,21 +552,16 @@ void estimate_beta2(const Eigen::Ref<const Eigen::MatrixXd> & X_visit,
                     Eigen::VectorXd & beta,
                     int n, int k, int t)
 {
-    // Math Geometry: Total columns = Intercept(1) + Dummies(k-1) + Covariates(p_cov-1)
-    int p_cov = X_visit.cols(); 
-    int q = k + p_cov - 1;
+    int q = X.cols();
     Eigen::MatrixXd XVX = Eigen::MatrixXd::Zero(q,q);
     Eigen::VectorXd XVy = Eigen::VectorXd::Zero(q);
-    /// Invert D EXACTLY ONCE outside the loop (Massive CPU saving!)
-    Eigen::MatrixXd D_safe = D;
-    D_safe.diagonal().array() += 1e-6; 
-
+    // 1. Invert D EXACTLY ONCE outside the loop (Massive CPU saving!)
     Eigen::MatrixXd D_inv;
-    Eigen::LDLT<Eigen::MatrixXd> ldlt_D(D_safe);
+    Eigen::LDLT<Eigen::MatrixXd> ldlt_D(D);
     if(ldlt_D.info() == Eigen::Success) {
         D_inv = ldlt_D.solve(Eigen::MatrixXd::Identity(2*k, 2*k));
     } else {
-        D_inv = D_safe.completeOrthogonalDecomposition().pseudoInverse();
+        D_inv = D.completeOrthogonalDecomposition().pseudoInverse();
     }
 
     Eigen::MatrixXd Zi, Xi, ZiX, M;
@@ -580,37 +575,20 @@ void estimate_beta2(const Eigen::Ref<const Eigen::MatrixXd> & X_visit,
         // Get Z for this subject
         Z_assemble_IP(Z, Zi, MAP, i, k, t, kt);
         
-        // 1. DYNAMIC L1 CACHE BUILDER
-        // We construct Xi on the fly instead of reading it from massive RAM!
-        Xi = Eigen::MatrixXd::Zero(kt, q);
+        // Bypass creating a dense Et matrix. Just grab the inverted diagonal
         E_inv.resize(kt);
-        
-        int local_row = 0;
-        for(int j = 0; j < k * t; ++j) 
-        {
-            if(MAP(i, j) == 1) 
-            {
-                int node = j / t;       // Which OTU is this? (0 to k-1)
-                int time_idx = j % t;   // Which timepoint is this? (0 to t-1)
-                int visit_row = i * t + time_idx; // Exact O(1) grid lookup in X_visit
-                
-                // A. Insert Intercept
-                Xi(local_row, 0) = X_visit(visit_row, 0);
-                
-                // B. Insert the ONE active OTU Dummy (if not the reference node)
-                if(node > 0) {
-                    Xi(local_row, node) = 1.0; 
+        int cnt2 = 0, c = 0;
+        for(int j = 0; j < k; ++j) {
+            for(int l = 0; l < t; ++l) {
+                if(MAP(i, cnt2) == 1) {
+                    E_inv(c++) = 1.0 / E(j); 
                 }
-                
-                // C. Insert the Dense Covariates
-                for(int c = 1; c < p_cov; ++c) {
-                    Xi(local_row, k - 1 + c) = X_visit(visit_row, c);
-                }
-                
-                E_inv(local_row) = 1.0 / std::max(E(node), 1e-8);
-                local_row++;
+                cnt2++;
             }
         }
+        
+        // Map the current subject's X and y
+        Xi = X.block(cnt, 0, kt, q);
         yi = y.segment(cnt, kt);
         
         // The Woodbury Transformation Variables
