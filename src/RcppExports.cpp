@@ -31,12 +31,13 @@ BEGIN_RCPP
 END_RCPP
 }
 // estimate_DEbeta
-Rcpp::List estimate_DEbeta(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Eigen::VectorXd> y, const Eigen::Map<Eigen::MatrixXd> masterZ, const Eigen::Map<Eigen::MatrixXi> MAP, int n, int k, int t, Eigen::ArrayXXd theta, int max_itr, double convergence_cutoff, bool REML, bool verbose, bool timings, int n_fold, bool custom_theta, int n_threads, int seed);
-RcppExport SEXP _DINE_estimate_DEbeta(SEXP XSEXP, SEXP ySEXP, SEXP masterZSEXP, SEXP MAPSEXP, SEXP nSEXP, SEXP kSEXP, SEXP tSEXP, SEXP thetaSEXP, SEXP max_itrSEXP, SEXP convergence_cutoffSEXP, SEXP REMLSEXP, SEXP verboseSEXP, SEXP timingsSEXP, SEXP n_foldSEXP, SEXP custom_thetaSEXP, SEXP n_threadsSEXP, SEXP seedSEXP) {
+Rcpp::List estimate_DEbeta(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::Map<Eigen::MatrixXd> U, const Eigen::Map<Eigen::VectorXd> y, const Eigen::Map<Eigen::MatrixXd> masterZ, const Eigen::Map<Eigen::MatrixXi> MAP, int n, int k, int t, Eigen::ArrayXXd theta, int max_itr, double convergence_cutoff, bool REML, bool verbose, bool timings, int n_fold, bool custom_theta, int n_threads, int seed);
+RcppExport SEXP _DINE_estimate_DEbeta(SEXP XSEXP, SEXP USEXP, SEXP ySEXP, SEXP masterZSEXP, SEXP MAPSEXP, SEXP nSEXP, SEXP kSEXP, SEXP tSEXP, SEXP thetaSEXP, SEXP max_itrSEXP, SEXP convergence_cutoffSEXP, SEXP REMLSEXP, SEXP verboseSEXP, SEXP timingsSEXP, SEXP n_foldSEXP, SEXP custom_thetaSEXP, SEXP n_threadsSEXP, SEXP seedSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXd> >::type U(USEXP);
     Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
     Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXd> >::type masterZ(masterZSEXP);
     Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXi> >::type MAP(MAPSEXP);
@@ -53,7 +54,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< bool >::type custom_theta(custom_thetaSEXP);
     Rcpp::traits::input_parameter< int >::type n_threads(n_threadsSEXP);
     Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
-    rcpp_result_gen = Rcpp::wrap(estimate_DEbeta(X, y, masterZ, MAP, n, k, t, theta, max_itr, convergence_cutoff, REML, verbose, timings, n_fold, custom_theta, n_threads, seed));
+    rcpp_result_gen = Rcpp::wrap(estimate_DEbeta(X, U, y, masterZ, MAP, n, k, t, theta, max_itr, convergence_cutoff, REML, verbose, timings, n_fold, custom_theta, n_threads, seed));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -115,7 +116,7 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_DINE_estimate_all", (DL_FUNC) &_DINE_estimate_all, 9},
-    {"_DINE_estimate_DEbeta", (DL_FUNC) &_DINE_estimate_DEbeta, 17},
+    {"_DINE_estimate_DEbeta", (DL_FUNC) &_DINE_estimate_DEbeta, 18},
     {"_DINE_covCalc", (DL_FUNC) &_DINE_covCalc, 3},
     {"_DINE_Z_assemble", (DL_FUNC) &_DINE_Z_assemble, 6},
     {"_DINE_calc_ZDZ_plus_E_list", (DL_FUNC) &_DINE_calc_ZDZ_plus_E_list, 6},
