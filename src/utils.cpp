@@ -763,7 +763,7 @@ void estimate_beta3(const Eigen::Ref<const Eigen::MatrixXd> & X,
     {
         int kt = kt_vec(i);
         if(kt == 0) continue;
-        int t0 = kt / k;
+        int t0 = kt % k;
         
         Z_assemble_IP(Z, Zi, MAP, i, k, t, kt); 
         
