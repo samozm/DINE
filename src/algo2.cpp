@@ -497,7 +497,9 @@ int a2_initial_estimates(const Eigen::MatrixXd & X,
     int q = 2*k; 
     Eigen::VectorXi kt_vec = MAP.rowwise().sum();
     // Manual XtX and Xty to bypass Apple Accelerate crashes
-    estimate_beta3(X,U,y,Z,Eigen::MatrixXd::Identity(2*k,2*k),Eigen::VectorXd::Constant(1.0,k),kt_vec,MAP,beta,n,k,t);
+    Eigen::MatrixXd D_init = (Z.transpose() * Z).llt().solve(Eigen::MatrixXd::Identity(2*k,2*k)).array() / 2;
+
+estimate_beta3(X,U,y,Z,D_init,Eigen::VectorXd::Constant(t*k,0.5),kt_vec,MAP,beta,n,k,t);
     r = update_residuals(X,U,y,beta,kt_vec,n,k,t,nkt);//y - X * beta;
     Eigen::MatrixXd R(n,k*t);
     int cnt = 0;
@@ -624,7 +626,7 @@ Rcpp::List estimate_DEbeta(const Eigen::Map<Eigen::MatrixXd> X,
     Eigen::VectorXd beta(p);
     Eigen::VectorXd r0;
     int nkt = y.size();
-        a2_initial_estimates(X,U,y,masterZ,MAP,Lambda_D,D,Lambda_E,beta,r0,n,k,t,nkt);
+    a2_initial_estimates(X,U,y,masterZ,MAP,Lambda_D,D,Lambda_E,beta,r0,n,k,t,nkt);
 
     Eigen::VectorXi kt_vec = MAP.rowwise().sum();
     Eigen::VectorXd beta_prev;
