@@ -11,8 +11,7 @@ estimate_all <- function(X, y, Z_in, n, k, t, max_itr = 250L, convergence_cutoff
 #' fixed effects (\code{beta}), random effect covariance (\code{D}), and residual variance (\code{E}) 
 #' using block-coordinate descent and cross-validated thresholding.
 #'
-#' @param X Numeric matrix of fixed effect covariates intercept, timepoints, and OTU
-#' @param U Numeric matrix of fixed effect covariates. Does not include OTU, timepoint, etc.
+#' @param X Numeric matrix of fixed effect covariates.
 #' @param y Numeric vector of the continuous response variable.
 #' @param masterZ Master random effect matrix containing all timepoints used by any subject
 #' @param MAP Integer matrix, n x kt describing which node/timepoint combinations each subject has
@@ -45,8 +44,8 @@ estimate_all <- function(X, y, Z_in, n, k, t, max_itr = 250L, convergence_cutoff
 #' }
 #'
 #' @export
-estimate_DEbeta <- function(X, U, y, masterZ, MAP, n, k, t, theta, max_itr = 250L, convergence_cutoff = 0.0001, REML = FALSE, verbose = FALSE, timings = FALSE, n_fold = 5L, custom_theta = FALSE, n_threads = 1L, seed = 1234L) {
-    .Call(`_DINE_estimate_DEbeta`, X, U, y, masterZ, MAP, n, k, t, theta, max_itr, convergence_cutoff, REML, verbose, timings, n_fold, custom_theta, n_threads, seed)
+estimate_DEbeta <- function(X, y, masterZ, MAP, n, k, t, theta, max_itr = 250L, convergence_cutoff = 0.0001, REML = FALSE, verbose = FALSE, timings = FALSE, n_fold = 5L, custom_theta = FALSE, n_threads = 1L, seed = 1234L) {
+    .Call(`_DINE_estimate_DEbeta`, X, y, masterZ, MAP, n, k, t, theta, max_itr, convergence_cutoff, REML, verbose, timings, n_fold, custom_theta, n_threads, seed)
 }
 
 covCalc <- function(X, MAP, print) {

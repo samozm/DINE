@@ -32,7 +32,8 @@ Eigen::VectorXd Zbcalc(const Eigen::Ref<const Eigen::MatrixXd> & Z,
 }
 
 
-void calc_b(const Eigen::Ref<const Eigen::VectorXd> & r0, 
+void calc_b(const Eigen::Ref<const Eigen::MatrixXd> & X, 
+            const Eigen::Ref<const Eigen::VectorXd> & r0, 
             const Eigen::Ref<const Eigen::MatrixXd> & Z,
             const Eigen::Ref<const Eigen::MatrixXd> & Lambda_D, 
             const Eigen::Ref<const Eigen::VectorXd> & E, 
@@ -73,7 +74,8 @@ void calc_b(const Eigen::Ref<const Eigen::VectorXd> & r0,
     b = Lambda_D.transpose() * DtZEEZDDZETEr0;
 }
 
-void estimate_E(const Eigen::Ref<const Eigen::VectorXd> & r0, 
+void estimate_E(const Eigen::Ref<const Eigen::MatrixXd> & X, 
+                const Eigen::Ref<const Eigen::VectorXd> & r0, 
                 const Eigen::Ref<const Eigen::MatrixXd> & Z,
                 const Eigen::Ref<const Eigen::MatrixXd> & Lambda_D, 
                 Eigen::VectorXd & Lambda_E,
@@ -81,7 +83,7 @@ void estimate_E(const Eigen::Ref<const Eigen::VectorXd> & r0,
                 int n, int k, int t, int nkt)
 {
     Eigen::VectorXd b;
-    calc_b(r0,Z,Lambda_D,Lambda_E,b,MAP,n,k,t,nkt);
+    calc_b(X,r0,Z,Lambda_D,Lambda_E,b,MAP,n,k,t,nkt);
     Eigen::VectorXd r = r0 - Zbcalc(Z, b, MAP, n, k, t, nkt);
     //Eigen::MatrixXd R = Eigen::MatrixXd::Zero(n*t,k);
     Eigen::VectorXd sum_val = Eigen::VectorXd::Zero(k);
@@ -360,7 +362,8 @@ void a2_threshold_D(const Eigen::MatrixXd & R, Eigen::MatrixXd& sigma,
 
 }
 
-void estimate_D(const Eigen::Ref<const Eigen::VectorXd> & r0, 
+void estimate_D(const Eigen::Ref<const Eigen::MatrixXd> & X, 
+                const Eigen::Ref<const Eigen::VectorXd> & r0, 
                 const Eigen::Ref<const Eigen::MatrixXd> & Z,
                 const Eigen::Ref<const Eigen::VectorXd> & E, 
                 Eigen::MatrixXd & Lambda_D, 
@@ -482,25 +485,45 @@ double calc_sigma2(const Eigen::Ref<const Eigen::MatrixXd> & Z,
     return(sigma2);
 }
 
-int a2_initial_estimates(const Eigen::MatrixXd & X, 
-                        const Eigen::MatrixXd & U, 
-                        const Eigen::VectorXd & y, 
-                        const Eigen::MatrixXd & Z, 
-                        const Eigen::MatrixXi & MAP, 
-                        Eigen::MatrixXd & Lambda_D, Eigen::MatrixXd & D, 
-                        Eigen::VectorXd & Lambda_E, Eigen::VectorXd & beta, 
-                        Eigen::VectorXd & r,
-                        int n, int k, int t, int nkt)
+int a2_initial_estimates(const Eigen::MatrixXd & X, const Eigen::VectorXd & y, 
+                       const Eigen::MatrixXd & Z, 
+                       const Eigen::MatrixXi & MAP, 
+                       Eigen::MatrixXd & Lambda_D, Eigen::MatrixXd & D, 
+                       Eigen::VectorXd & Lambda_E, Eigen::VectorXd & beta, 
+                       Eigen::VectorXd & r,
+                       int n, int k, int t)
 {
-    // TODO: fix X
     int p = X.cols();
     int q = 2*k; 
-    Eigen::VectorXi kt_vec = MAP.rowwise().sum();
     // Manual XtX and Xty to bypass Apple Accelerate crashes
-    estimate_beta3(X,U,y,Z,Eigen::MatrixXd::Identity(2*k,2*k),Eigen::VectorXd::Constant(1.0,k),kt_vec,MAP,beta,n,k,t);
-    r = update_residuals(X,U,y,beta,kt_vec,n,k,t,nkt);//y - X * beta;
+    Eigen::MatrixXd XtX = Eigen::MatrixXd::Zero(p, p);
+    Eigen::VectorXd Xty = Eigen::VectorXd::Zero(p);
+    
+    for(int i=0; i < X.rows(); ++i) {
+        for(int c1=0; c1 < p; ++c1) {
+            Xty(c1) += X(i, c1) * y(i);
+            for(int c2=0; c2 <= c1; ++c2) {
+                XtX(c1, c2) += X(i, c1) * X(i, c2);
+            }
+        }
+    }
+    
+    // Mirror the lower triangle to upper
+    for(int c1=0; c1 < p; ++c1) {
+        for(int c2=c1+1; c2 < p; ++c2) {
+            XtX(c1, c2) = XtX(c2, c1);
+        }
+    }
+    // SAFE SOLVER
+    Eigen::LDLT<Eigen::MatrixXd> ldlt_XtX(XtX);
+    if(ldlt_XtX.info() == Eigen::Success) {
+        beta = ldlt_XtX.solve(Xty);
+    } else {
+        beta = XtX.completeOrthogonalDecomposition().pseudoInverse() * Xty;
+    }
+    r = y - X * beta;
     Eigen::MatrixXd R(n,k*t);
-    int cnt = 0;
+    int nkt = 0;
     for(int i = 0; i<n; ++i)
     {
         int kt0 = 0; // Tracks how many valid nodes this specific subject has
@@ -508,11 +531,11 @@ int a2_initial_estimates(const Eigen::MatrixXd & X,
         {
             if(MAP(i, j) == 1)
             {
-                R(i, j) = r(cnt + kt0);
+                R(i, j) = r(nkt + kt0);
                 kt0++;
             }
         }
-        cnt += kt0;
+        nkt += kt0;
     }
     Eigen::MatrixXd cov_int = covCalc(R, MAP);
     for(int i=0;i<k;++i)
@@ -524,6 +547,7 @@ int a2_initial_estimates(const Eigen::MatrixXd & X,
 
     Eigen::MatrixXd B = Eigen::MatrixXd::Zero(q,q); 
     Eigen::MatrixXd ZCZ = Eigen::MatrixXd::Zero(q,q);
+    Eigen::VectorXi kt_vec = MAP.rowwise().sum();
     Eigen::MatrixXd Zi(k*t,2*k);
     for(int i=0; i<n;++i)
     {
@@ -551,8 +575,7 @@ int a2_initial_estimates(const Eigen::MatrixXd & X,
 //' fixed effects (\code{beta}), random effect covariance (\code{D}), and residual variance (\code{E}) 
 //' using block-coordinate descent and cross-validated thresholding.
 //'
-//' @param X Numeric matrix of fixed effect covariates intercept, timepoints, and OTU
-//' @param U Numeric matrix of fixed effect covariates. Does not include OTU, timepoint, etc.
+//' @param X Numeric matrix of fixed effect covariates.
 //' @param y Numeric vector of the continuous response variable.
 //' @param masterZ Master random effect matrix containing all timepoints used by any subject
 //' @param MAP Integer matrix, n x kt describing which node/timepoint combinations each subject has
@@ -587,7 +610,6 @@ int a2_initial_estimates(const Eigen::MatrixXd & X,
 //' @export
 // [[Rcpp::export]]
 Rcpp::List estimate_DEbeta(const Eigen::Map<Eigen::MatrixXd> X, 
-                           const Eigen::Map<Eigen::MatrixXd> U, 
                            const Eigen::Map<Eigen::VectorXd> y, 
                            const Eigen::Map<Eigen::MatrixXd> masterZ, 
                            const Eigen::Map<Eigen::MatrixXi> MAP,
@@ -623,8 +645,8 @@ Rcpp::List estimate_DEbeta(const Eigen::Map<Eigen::MatrixXd> X,
     Eigen::VectorXd Lambda_E(k);
     Eigen::VectorXd beta(p);
     Eigen::VectorXd r0;
-    int nkt = y.size();
-        a2_initial_estimates(X,U,y,masterZ,MAP,Lambda_D,D,Lambda_E,beta,r0,n,k,t,nkt);
+    
+    int nkt = a2_initial_estimates(X,y,masterZ,MAP,Lambda_D,D,Lambda_E,beta,r0,n,k,t);
 
     Eigen::VectorXi kt_vec = MAP.rowwise().sum();
     Eigen::VectorXd beta_prev;
@@ -647,18 +669,18 @@ Rcpp::List estimate_DEbeta(const Eigen::Map<Eigen::MatrixXd> X,
         prev_err = err;
         beta_prev = beta;
         auto t1 = std::chrono::high_resolution_clock::now();
-        estimate_beta3(X,U,y,masterZ,D,Lambda_E.array().square(),kt_vec,MAP,beta,n,k,t);
+        estimate_beta2(X,y,masterZ,D,Lambda_E.array().square(),kt_vec,MAP,beta,n,k,t);
         auto t2 = std::chrono::high_resolution_clock::now();
         double err2 = (beta - beta_prev).squaredNorm() / beta_prev.squaredNorm(); 
 
-        r0 = update_residuals(X,U,y,beta,kt_vec,n,k,t,nkt);//y - X * beta; 
+        r0 = y - X * beta; 
         D_prev = Lambda_D;
-        estimate_D(r0,masterZ,Lambda_E.array().square(),Lambda_D,MAP,D,theta,n,k,t,nkt,n_itr,n_fold,custom_theta);
+        estimate_D(X,r0,masterZ,Lambda_E.array().square(),Lambda_D,MAP,D,theta,n,k,t,nkt,n_itr,n_fold,custom_theta);
         auto t3 = std::chrono::high_resolution_clock::now();
         double err0 = (Lambda_D - D_prev).squaredNorm() / D_prev.squaredNorm();
 
         E_prev = Lambda_E;
-        estimate_E(r0,masterZ,Lambda_D,Lambda_E,MAP,n,k,t,nkt);
+        estimate_E(X,r0,masterZ,Lambda_D,Lambda_E,MAP,n,k,t,nkt);
         auto t4 = std::chrono::high_resolution_clock::now();
         double err1 = (Lambda_E - E_prev).squaredNorm() / E_prev.squaredNorm();
 

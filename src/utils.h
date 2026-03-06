@@ -68,30 +68,12 @@ int make_MAP(const std::vector<Eigen::MatrixXd>& Z,
              Eigen::MatrixXi & MAP, Eigen::VectorXd & r0,
              int n, int k, int t);
 
-Eigen::VectorXd update_residuals(const Eigen::MatrixXd & X,
-                                const Eigen::MatrixXd & U, 
-                                const Eigen::VectorXd & y, 
-                                const Eigen::VectorXd & beta, 
-                                const Eigen::VectorXi & kt_vec,
-                                int n, int k, int t, int nkt);
-
 void estimate_beta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y, 
                    const Eigen::VectorXi kt_vec, const Eigen::MatrixXi & MAP,
                    const std::vector<Eigen::MatrixXd> & V, Eigen::VectorXd & beta,
                    int n, int k, int t);
 
 void estimate_beta2(const Eigen::Ref<const Eigen::MatrixXd> & X, 
-                    const Eigen::Ref<const Eigen::VectorXd> & y, 
-                    const Eigen::Ref<const Eigen::MatrixXd> & Z,
-                    const Eigen::Ref<const Eigen::MatrixXd> & D,
-                    const Eigen::Ref<const Eigen::VectorXd> & E,
-                    const Eigen::VectorXi & kt_vec, 
-                    const Eigen::Ref<const Eigen::MatrixXi> & MAP,
-                    Eigen::VectorXd & beta,
-                    int n, int k, int t);
-
-void estimate_beta3(const Eigen::Ref<const Eigen::MatrixXd> & X, 
-                    const Eigen::Ref<const Eigen::MatrixXd> & U, 
                     const Eigen::Ref<const Eigen::VectorXd> & y, 
                     const Eigen::Ref<const Eigen::MatrixXd> & Z,
                     const Eigen::Ref<const Eigen::MatrixXd> & D,
@@ -118,10 +100,6 @@ void Z_assemble_IP(const Eigen::Ref<const Eigen::MatrixXd> & masterZ,
                    Eigen::MatrixXd & Z_out,
                    const Eigen::Ref<const Eigen::MatrixXi> & MAP,
                    int i, int k, int t, int kt);
-
-void U_assemble_IP(const Eigen::Ref<const Eigen::MatrixXd> & masterU, 
-                   Eigen::MatrixXd & U_out, 
-                   int p, int k, int kt);
 
 Eigen::VectorXd R_expand(const Eigen::VectorXd & R,
                          const Eigen::MatrixXi & MAP,
