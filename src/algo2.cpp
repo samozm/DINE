@@ -500,7 +500,7 @@ int a2_initial_estimates(const Eigen::MatrixXd & X,
     Eigen::MatrixXd D_init = (Z.transpose() * Z).llt().solve(Eigen::MatrixXd::Identity(2*k,2*k)).array() / 2;
 
 estimate_beta3(X,U,y,Z,D_init,Eigen::VectorXd::Constant(t*k,0.5),kt_vec,MAP,beta,n,k,t);
-    r = update_residuals(X,U,y,beta,kt_vec,n,k,t,nkt);//y - X * beta;
+    r = update_residuals(X,U,y,beta,kt_vec,MAP,n,k,t,nkt);//y - X * beta;
     Eigen::MatrixXd R(n,k*t);
     int cnt = 0;
     for(int i = 0; i<n; ++i)
@@ -653,7 +653,7 @@ Rcpp::List estimate_DEbeta(const Eigen::Map<Eigen::MatrixXd> X,
         auto t2 = std::chrono::high_resolution_clock::now();
         double err2 = (beta - beta_prev).squaredNorm() / beta_prev.squaredNorm(); 
 
-        r0 = update_residuals(X,U,y,beta,kt_vec,n,k,t,nkt);//y - X * beta; 
+        r0 = update_residuals(X,U,y,beta,kt_vec,MAP,n,k,t,nkt);//y - X * beta; 
         D_prev = Lambda_D;
         estimate_D(r0,masterZ,Lambda_E.array().square(),Lambda_D,MAP,D,theta,n,k,t,nkt,n_itr,n_fold,custom_theta);
         auto t3 = std::chrono::high_resolution_clock::now();

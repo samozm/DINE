@@ -519,7 +519,8 @@ Rcpp::List calc_ZDZ_plus_E_list(const std::vector<Eigen::MatrixXd>& Z,
 
 void U_assemble_IP(const Eigen::Ref<const Eigen::MatrixXd> & masterU, 
                    Eigen::MatrixXd & U_out, 
-                   int p, int k, int kt)
+                   const Eigen::Ref<const Eigen::MatrixXi> & MAP,
+                   int i, int p, int k, int t, int kt)
 {
     /*
         masterU comes in as t x p
@@ -527,10 +528,28 @@ void U_assemble_IP(const Eigen::Ref<const Eigen::MatrixXd> & masterU,
     */
     if(p<=0){return;}
     U_out.resize(kt,p);
-    for(int j=0; j<kt; ++j)
-    {
-        int t0 = j % k;
-        U_out.row(j) = masterU.row(t0);
+    // 1. Map the absolute time_idx (0 to t-1) to the compressed masterU row (0 to t_i-1)
+    std::vector<int> time_to_u_row(t, -1);
+    int u_row = 0;
+    for(int time_idx = 0; time_idx < t; ++time_idx) {
+        // Check if this timepoint has data for AT LEAST one node
+        for(int node = 0; node < k; ++node) {
+            if(MAP(i, node * t + time_idx) == 1) {
+                time_to_u_row[time_idx] = u_row++;
+                break; // Found it, move to next time_idx
+            }
+        }
+    }
+
+    // 2. Assemble Ui in the EXACT SAME ORDER as Xi and Zi
+    int local_row = 0;
+    for(int j = 0; j < k * t; ++j) {
+        if(MAP(i, j) == 1) {
+            int time_idx = j % t; // Extract the absolute time
+            // Grab the correct compressed row for this timepoint
+            U_out.row(local_row) = masterU.row(time_to_u_row[time_idx]);
+            local_row++;
+        }
     }
 }
 
@@ -539,6 +558,7 @@ Eigen::VectorXd update_residuals(const Eigen::MatrixXd & X,
                                 const Eigen::VectorXd & y, 
                                 const Eigen::VectorXd & beta, 
                                 const Eigen::VectorXi & kt_vec,
+                                const Eigen::MatrixXi & MAP,
                                 int n, int k, int t, int nkt)
 {
     int q = X.cols();
@@ -556,7 +576,7 @@ Eigen::VectorXd update_residuals(const Eigen::MatrixXd & X,
         int kt = kt_vec(i);
         if(kt == 0){continue;}
         int t0 = kt % k;
-        if(p>0) {U_assemble_IP(U(Eigen::seqN(cnt2,t0),Eigen::all),Ui,p,k,kt);}
+        if(p>0) {U_assemble_IP(U(Eigen::seqN(cnt2,t0),Eigen::all),Ui,MAP, i, p,k,t,kt);}
         Xi = X.block(cnt, 0, kt, q);
         r.segment(cnt,kt) = y.segment(cnt,kt) - Xi * beta.segment(0,q);
         if(p>0){ r.segment(cnt,kt) -= Ui * beta.segment(q,p);}
@@ -754,8 +774,24 @@ void estimate_beta3(const Eigen::Ref<const Eigen::MatrixXd> & X,
         D_inv = D.completeOrthogonalDecomposition().pseudoInverse();
     }
 
+    // --- HOISTED ALLOCATIONS (Zero memory requested inside the loop) ---
     Eigen::MatrixXd Zi, Xi, ZiX, M, ZiU, Ui;
-    Eigen::VectorXd yi, E_inv, Ziy;
+    Eigen::VectorXd yi, E_inv(k*t), Ziy;
+    
+    // Pre-allocate maximum possible sizes
+   // Pre-allocate maximum possible sizes
+    Eigen::MatrixXd X_tilde(k*t, q), Zi_tilde(k*t, 2*k);
+    Eigen::VectorXd y_tilde(k*t);
+    
+    // PRE-SIZE THESE SO .noalias() DOESN'T HIT NIL
+    Eigen::MatrixXd MZiX(2*k, q); 
+    Eigen::VectorXd MZiy(2*k);    
+    
+    Eigen::MatrixXd U_tilde;
+    if (p > 0) {
+        U_tilde.resize(k*t, p);
+    }
+    
     int cnt = 0;
     int cnt2 = 0;
     
@@ -763,11 +799,10 @@ void estimate_beta3(const Eigen::Ref<const Eigen::MatrixXd> & X,
     {
         int kt = kt_vec(i);
         if(kt == 0) continue;
-        int t0 = kt % k;
+        int t0 = kt / k; // FIXED: / instead of %
         
         Z_assemble_IP(Z, Zi, MAP, i, k, t, kt); 
         
-        E_inv.resize(kt);
         int cnt3 = 0, c = 0;
         for(int j = 0; j < k; ++j) {
             for(int l = 0; l < t; ++l) {
@@ -779,49 +814,71 @@ void estimate_beta3(const Eigen::Ref<const Eigen::MatrixXd> & X,
         Xi = X.block(cnt, 0, kt, q);
         yi = y.segment(cnt, kt);
         
-        Eigen::MatrixXd X_tilde = E_inv.asDiagonal() * Xi;
-        Eigen::VectorXd y_tilde = E_inv.asDiagonal() * yi;
+        // 1. PURE SIMD SCALING (No dense diagonal matrices!)
+        auto E_inv_head = E_inv.head(kt).array();
+        X_tilde.topRows(kt) = Xi.array().colwise() * E_inv_head;
+        y_tilde.head(kt) = yi.array() * E_inv_head;
+        Zi_tilde.topRows(kt) = Zi.array().colwise() * E_inv_head;
         
-        XVX.noalias() += Xi.transpose() * X_tilde;
-        XVy.noalias() += Xi.transpose() * y_tilde;
+        XVX.noalias() += Xi.transpose() * X_tilde.topRows(kt);
+        XVy.noalias() += Xi.transpose() * y_tilde.head(kt);
 
-        // --- CONDITIONAL U ASSEMBLY ---
-        Eigen::MatrixXd U_tilde;
         if (p > 0) {
-            U_assemble_IP(U(Eigen::seqN(cnt2,t0),Eigen::all), Ui, p, k, kt); // Only call if p exists
-            U_tilde = E_inv.asDiagonal() * Ui;
-            UVX.noalias() += Ui.transpose() * X_tilde;
-            UVU.noalias() += Ui.transpose() * U_tilde;
-            UVy.noalias() += Ui.transpose() * y_tilde;
-            ZiU = Zi.transpose() * U_tilde;
+            U_assemble_IP(U(Eigen::seqN(cnt2,t0),Eigen::all), Ui, MAP, i, p, k,t, kt); 
+            U_tilde.topRows(kt) = Ui.array().colwise() * E_inv_head;
+            
+            UVX.noalias() += Ui.transpose() * X_tilde.topRows(kt);
+            UVU.noalias() += Ui.transpose() * U_tilde.topRows(kt);
+            UVy.noalias() += Ui.transpose() * y_tilde.head(kt);
+            ZiU.noalias() = Zi.transpose() * U_tilde.topRows(kt);
         }
         
-        ZiX = Zi.transpose() * X_tilde;  
-        Ziy = Zi.transpose() * y_tilde;
+        ZiX.noalias() = Zi.transpose() * X_tilde.topRows(kt);  
+        Ziy.noalias() = Zi.transpose() * y_tilde.head(kt);
         
-        M = D_inv + Zi.transpose() * E_inv.asDiagonal() * Zi; 
+        // 2. REUSE THE SCALED Zi FOR M
+        M = D_inv;
+        M.noalias() += Zi.transpose() * Zi_tilde.topRows(kt); 
         
         Eigen::LDLT<Eigen::MatrixXd> ldlt_M(M);
         if(ldlt_M.info() == Eigen::Success) {
-            Eigen::VectorXd MZiy = ldlt_M.solve(Ziy);
-            Eigen::MatrixXd MZiX = ldlt_M.solve(ZiX);
+            
+            // 1. Copy the Right-Hand Sides into the pre-allocated buffers
+            MZiy = Ziy;
+            MZiX = ZiX;
+            
+            // 2. Perform the forward/backward substitution directly on the memory bytes
+            ldlt_M.solveInPlace(MZiy);
+            ldlt_M.solveInPlace(MZiX);
+            
+            // 3. Subtract from the accumulators
             XVX.noalias() -= ZiX.transpose() * MZiX;
             XVy.noalias() -= ZiX.transpose() * MZiy;
             
             if (p > 0) {
                 UVX.noalias() -= ZiU.transpose() * MZiX;
                 UVy.noalias() -= ZiU.transpose() * MZiy;
-                UVU.noalias() -= ZiU.transpose() * ldlt_M.solve(ZiU);
+                
+                // For UVU, we can do the same trick!
+                Eigen::MatrixXd MZiU = ZiU;
+                ldlt_M.solveInPlace(MZiU);
+                UVU.noalias() -= ZiU.transpose() * MZiU;
             }
         } else {
+            // Fallback for singular matrices
             Eigen::MatrixXd M_inv = M.completeOrthogonalDecomposition().pseudoInverse();
-            XVX.noalias() -= ZiX.transpose() * M_inv * ZiX;
-            XVy.noalias() -= ZiX.transpose() * M_inv * Ziy;
+            MZiX.noalias() = M_inv * ZiX; // Now safe because MZiX is sized (2k x q)
+            
+            XVX.noalias() -= ZiX.transpose() * MZiX;
+            XVy.noalias() -= ZiX.transpose() * (M_inv * Ziy);
             
             if (p > 0) {
-                UVX.noalias() -= ZiU.transpose() * (M_inv * ZiX);
+                // Drop .noalias() so Eigen automatically sizes this to (2k x p)
+                Eigen::MatrixXd MZiU = M_inv * ZiU; 
+                
+                UVX.noalias() -= ZiU.transpose() * MZiX;
                 UVy.noalias() -= ZiU.transpose() * (M_inv * Ziy);
-                UVU.noalias() -= ZiU.transpose() * (M_inv * ZiU);
+                UVU.noalias() -= ZiU.transpose() * MZiU;
             }
         }
         cnt += kt;
@@ -851,6 +908,7 @@ void estimate_beta3(const Eigen::Ref<const Eigen::MatrixXd> & X,
         Eigen::VectorXd WVy(p + q);
         WVy << XVy, UVy;
 
+        // TODO: block inverse
         beta = WVW.ldlt().solve(WVy);
     }
 }
