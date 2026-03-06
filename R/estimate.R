@@ -65,6 +65,7 @@ estimate <- function(X,U,y,Z,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(1
     res <- estimate_DEbeta(X,U,y,masterZ,MAP,n0,k0,t0,threshold,max_itr,convergence_cutoff,REML,verbose,timings,n_fold=n_fold,custom_theta=custom_theta,n_threads=n_threads) 
     #a2.estimate_DEbeta(X,y,Z,n0,k0,t0,max_itr,covtype,idx)
     sigma <- res$sigma
+    print(sigma)
   }
   else if(algo==1)
   {
