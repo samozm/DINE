@@ -72,9 +72,6 @@ estimate <- function(X,U,y,Z,n0,k0,t0,algo=2,max_itr=200,convergence_cutoff=5*(1
     sigma <- 0
     V_nonzeros_pct <- res$V_nonzeros_pct
   }
-  else{
-    print("choose algo 1 or 2")
-  }
   
   exeTimeClass <- proc.time() - startTime
   exeTime <- as.numeric(exeTimeClass[3])
