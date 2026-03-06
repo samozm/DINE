@@ -88,7 +88,7 @@ Eigen::MatrixXd Et_assemble(const Eigen::VectorXd & E,
                             int i, int k, int t, int kt);
 
 void Et_assemble_IP(const Eigen::Ref<const Eigen::VectorXd> & E, 
-                    Eigen::MatrixXd & Et,
+                    Eigen::VectorXd & Et,
                     const Eigen::Ref<const Eigen::MatrixXi> & MAP, 
                     int i, int k, int t, int kt);
 
@@ -97,6 +97,13 @@ Eigen::MatrixXd Z_assemble(const Eigen::MatrixXd & masterZ,
                            int i, int k, int t, int kt);
 
 void Z_assemble_IP(const Eigen::Ref<const Eigen::MatrixXd> & masterZ, 
+                   Eigen::MatrixXd & Z_out,
+                   const Eigen::Ref<const Eigen::MatrixXi> & MAP,
+                   int i, int k, int t, int kt);
+
+void Et_Z_assemble_IP(const Eigen::Ref<const Eigen::VectorXd> & masterE, 
+                   Eigen::VectorXd & Et_out,
+                   const Eigen::Ref<const Eigen::MatrixXd> & masterZ, 
                    Eigen::MatrixXd & Z_out,
                    const Eigen::Ref<const Eigen::MatrixXi> & MAP,
                    int i, int k, int t, int kt);

@@ -450,12 +450,12 @@ Eigen::MatrixXd Z_assemble(const Eigen::MatrixXd & masterZ,
 }
 
 void Et_assemble_IP(const Eigen::Ref<const Eigen::VectorXd> & E, 
-                    Eigen::MatrixXd & Et,
+                    Eigen::VectorXd & Et,
                     const Eigen::Ref<const Eigen::MatrixXi> & MAP, 
                     int i, int k, int t, int kt)
 {
     // Function body remains identical
-    Et.setZero(kt,kt);
+    Et.resize(kt);
     int cnt = 0;
     int cnt2 = 0;
     for(int j = 0; j < k; ++j)
@@ -464,7 +464,7 @@ void Et_assemble_IP(const Eigen::Ref<const Eigen::VectorXd> & E,
         {
         if(MAP(i,cnt2) == 1)
         {
-            Et.diagonal()(cnt) = E(j);
+            Et(cnt) = E(j);
             cnt++;
         }
         cnt2++;
@@ -472,21 +472,55 @@ void Et_assemble_IP(const Eigen::Ref<const Eigen::VectorXd> & E,
     }
 }
 
-void Z_assemble_IP(const Eigen::Ref<const Eigen::MatrixXd> & masterZ, 
-                   Eigen::MatrixXd & Z_out,
+void Z_assemble_IP(const Eigen::Ref<const Eigen::MatrixXd> & masterZt, 
+                   Eigen::MatrixXd & Zt_out,
                    const Eigen::Ref<const Eigen::MatrixXi> & MAP,
                    int i, int k, int t, int kt)
 {
     // Function body remains identical
-    Z_out.resize(kt,2*k);
+    Zt_out.resize(2*k,kt);
     int cnt = 0;
     for(int j = 0; j<k*t; ++j)
     {
         if(MAP(i,j) == 1)
         {
-            Z_out.row(cnt).noalias() = masterZ.row(j);
+            Zt_out.col(cnt).noalias() = masterZt.col(j);
             cnt++;
         }
+    }
+}
+
+void Et_Z_assemble_IP(const Eigen::Ref<const Eigen::VectorXd> & masterE, 
+                   Eigen::VectorXd & Et_out,
+                   const Eigen::Ref<const Eigen::MatrixXd> & masterZt, 
+                   Eigen::MatrixXd & Zt_out,
+                   const Eigen::Ref<const Eigen::MatrixXi> & MAP,
+                   int i, int k, int t, int kt)
+{
+    // we can allow Z_out to be bigger than we need but not smaller
+    if(Zt_out.rows() < 2*k || Zt_out.cols() < kt)
+    {
+        Zt_out.resize(2*k,kt);
+    }
+    // we can allow Et_out to be bigger than we need but not smaller
+    if(Et_out.size() < kt)
+    {
+        Et_out.resize(kt);
+    }
+    int cnt = 0;
+    int cnt2 = 0;
+    for(int j = 0; j<k; ++j)
+    {
+        for(int l = 0; l < t; ++l)
+        {
+            if(MAP(i,cnt2) == 1)
+            {
+                Et_out(cnt) = masterE(j);
+                Zt_out.col(cnt).noalias() = masterZt.col(j);
+                cnt++;
+            }
+        }
+        cnt2++;
     }
 }
 
@@ -579,7 +613,7 @@ void estimate_beta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
 
 void estimate_beta2(const Eigen::Ref<const Eigen::MatrixXd> & X, 
                     const Eigen::Ref<const Eigen::VectorXd> & y, 
-                    const Eigen::Ref<const Eigen::MatrixXd> & Z,
+                    const Eigen::Ref<const Eigen::MatrixXd> & Zt,
                     const Eigen::Ref<const Eigen::MatrixXd> & D,
                     const Eigen::Ref<const Eigen::VectorXd> & E,
                     const Eigen::VectorXi & kt_vec, 
@@ -599,7 +633,7 @@ void estimate_beta2(const Eigen::Ref<const Eigen::MatrixXd> & X,
         D_inv = D.completeOrthogonalDecomposition().pseudoInverse();
     }
 
-    Eigen::MatrixXd Zi, Xi, ZiX, M;
+    Eigen::MatrixXd Zti, Xi, ZiX, M;
     Eigen::VectorXd yi, E_inv, Ziy;
     int cnt = 0;
     
@@ -608,7 +642,7 @@ void estimate_beta2(const Eigen::Ref<const Eigen::MatrixXd> & X,
         int kt = kt_vec(i);
         
         // Get Z for this subject
-        Z_assemble_IP(Z, Zi, MAP, i, k, t, kt);
+        Z_assemble_IP(Zt, Zti, MAP, i, k, t, kt);
         
         // Bypass creating a dense Et matrix. Just grab the inverted diagonal
         E_inv.resize(kt);
@@ -635,11 +669,11 @@ void estimate_beta2(const Eigen::Ref<const Eigen::MatrixXd> & X,
         XVy.noalias() += Xi.transpose() * y_tilde;
         
         // Inner Woodbury components
-        ZiX = Zi.transpose() * X_tilde;  
-        Ziy = Zi.transpose() * y_tilde;  
+        ZiX = Zti * X_tilde;  
+        Ziy = Zti * y_tilde;  
         
         // Inner matrix M = D^-1 + Z^T * E^-1 * Z  (Always exactly 2k x 2k)
-        M = D_inv + Zi.transpose() * E_inv.asDiagonal() * Zi; 
+        M = D_inv + Zti * E_inv.asDiagonal() * Zti.transpose(); 
         
         // Fast 2k x 2k decomposition
         Eigen::LDLT<Eigen::MatrixXd> ldlt_M(M);
