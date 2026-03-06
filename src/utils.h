@@ -73,7 +73,6 @@ Eigen::VectorXd update_residuals(const Eigen::MatrixXd & X,
                                 const Eigen::VectorXd & y, 
                                 const Eigen::VectorXd & beta, 
                                 const Eigen::VectorXi & kt_vec,
-                                const Eigen::MatrixXi & MAP,
                                 int n, int k, int t, int nkt);
 
 void estimate_beta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y, 
@@ -122,8 +121,7 @@ void Z_assemble_IP(const Eigen::Ref<const Eigen::MatrixXd> & masterZ,
 
 void U_assemble_IP(const Eigen::Ref<const Eigen::MatrixXd> & masterU, 
                    Eigen::MatrixXd & U_out, 
-                   const Eigen::Ref<const Eigen::MatrixXi> & MAP,
-                   int i, int p, int k, int t, int kt);
+                   int p, int k, int kt);
 
 Eigen::VectorXd R_expand(const Eigen::VectorXd & R,
                          const Eigen::MatrixXi & MAP,
