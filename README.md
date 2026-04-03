@@ -1,4 +1,4 @@
-# Dynamic Network Interaction Estimation (DCENt) 
+# Dynamic Co-Expression Network Estimation (DCENt) 
 
 ## Installation
 
