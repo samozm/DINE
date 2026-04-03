@@ -1,10 +1,10 @@
-# Dynamic Network Interaction Estimation (DINE) 
+# Dynamic Co-Expression Network Estimation (DCENt) 
 
 ## Installation
 
 To install the DINE R package, use the `install_github` command from the `devtools` package.
 
-```devtools::install_github("samozm/DINE")```
+```devtools::install_github("samozm/DCENt")```
 
 ## Use
 The algorithm has 6 required inputs. They are as follows
@@ -20,4 +20,4 @@ $Z = \begin{bmatrix}\textbf{1}_{T_1 \times 1} & \mathbf{[T_1]} & & \textbf{0}\\ 
 - ALGORITHM: algorithm number (1 or 2)
 
 Then the estimator can be run as
-```DINE::estimate(X,y,Z,n0,k0,t0,ALGORITHM)```
+```DCENt::estimate(X,y,Z,n0,k0,t0,ALGORITHM)```
