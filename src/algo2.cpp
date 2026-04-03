@@ -204,19 +204,6 @@ void calc_e(const Eigen::Ref<const Eigen::VectorXd> & r0,
     }
 }
 
-// Helper to calculate the upper/lower bounds safely
-void get_bounds(const Eigen::MatrixXd& cov, const Eigen::ArrayXXd& theta, double& lower, double& upper) 
-{
-    Eigen::ArrayXXd safe_theta = (theta == 0.0).select(1e-8, theta);
-    Eigen::MatrixXd delta = (cov.array() / safe_theta).cwiseAbs().matrix();
-    delta.diagonal() = Eigen::VectorXd::Zero(delta.rows());
-    
-    upper = delta.maxCoeff();
-    lower = (delta.array() <= 0.0).select(std::numeric_limits<double>::max(), delta).minCoeff();
-    if (lower == std::numeric_limits<double>::max()) lower = 0.0;
-}
-
-
 void a2_thresholdRange(const Eigen::MatrixXd & R, Eigen::ArrayXXd& theta, Eigen::MatrixXd& cov, 
                     const Eigen::MatrixXi & MAP, double & lower, double & upper)
 {
@@ -430,7 +417,7 @@ void estimate_D(const Eigen::Ref<const Eigen::MatrixXd> & X,
     //give option to have user input threshold theta
     if(itr % 5 == 0 && !custom_theta)
     {
-        a2_threshold_D(R.transpose(),D,theta,MAP,n_fold,seed=seed,timings=timings);
+        a2_threshold_D(R.transpose(),D,theta,MAP,n_fold,seed,timings);
     }else{
         Eigen::MatrixXd cov = covCalc(R.transpose(), MAP);
         D.setZero(p,p);
@@ -688,7 +675,7 @@ Rcpp::List estimate_DEbeta(const Eigen::Map<Eigen::MatrixXd> X,
     // Protect C++ from R's NAs
     // TODO: better NA handling?
     if (X.hasNaN() || y.hasNaN() || masterZ.hasNaN()) {
-        Rcpp::stop("Input matrix X or vector y contains NA/NaN values. Please remove them before running DINE.");
+        Rcpp::stop("Input matrix X or vector y contains NA/NaN values. Please remove them before running DCENt.");
     }
 
     // Lock Eigen to 1 thread permanently 
@@ -805,6 +792,8 @@ Rcpp::List estimate_DEbeta(const Eigen::Map<Eigen::MatrixXd> X,
 
     Eigen::MatrixXd Sigma = masterZ * D * masterZt;
     Sigma.diagonal().array() += Et.array();
+    //Eigen::MatrixXd Sigma(nkt,nkt);
+    //calc_ZDZ_plus_E(masterZt,D,E,Sigma,MAP,n,k,t,nkt);
 
     return(Rcpp::List::create(Rcpp::Named("Sigma")=Sigma,
            Rcpp::Named("E") = E,Rcpp::Named("D") = D, 

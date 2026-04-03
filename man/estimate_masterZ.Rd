@@ -2,7 +2,7 @@
 % Please edit documentation in R/estimate.R
 \name{estimate_masterZ}
 \alias{estimate_masterZ}
-\title{Run DINE algorithm 1 or 2}
+\title{Run DCENt algorithm 1 or 2}
 \usage{
 estimate_masterZ(
   X,
@@ -73,5 +73,5 @@ A named list containing:
 }
 }
 \description{
-Run DINE algorithm 1 or 2
+Run DCENt algorithm 1 or 2
 }

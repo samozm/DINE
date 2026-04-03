@@ -1,31 +1,16 @@
 #define STRICT_R_HEADERS
 #define EIGEN_PERMANENTLY_DISABLE_STUPID_WARNINGS
 #include "utils.h"
+#include <chrono>
 
-void big_to_small_E(const Eigen::MatrixXd & big_E, Eigen::MatrixXd & E, 
-          const Eigen::MatrixXi & MAP, 
-          int n, int k, int t)
-{
-    E = Eigen::MatrixXd::Zero(k,k);
-    for(int i=0;i<k;++i)
-    {
-        E(i,i) = big_E(Eigen::seqN(i*t,t),Eigen::seqN(i*t,t)).diagonal().mean();
-    }
-    
-    for(int i=0;i<k;++i)
-    {
-        E(i,i) = E(i,i) > 0 ? E(i,i) : double(1) /(n*k);
-    }
-}
 
-Rcpp::List estimate_V(const Eigen::MatrixXd & X, const Eigen::VectorXd & y, 
-    std::vector<Eigen::MatrixXd> & V, const Eigen::VectorXd & beta,
+void estimate_V(const Eigen::MatrixXd & X, const Eigen::VectorXd & y, 
+    Eigen::MatrixXd & masterV, const Eigen::VectorXd & beta,
     const Eigen::MatrixXi & MAP,
-    int n, int k, int t)
+    int n, int k, int t, double eigen_threshold=pow(10,-4))
 {
     Eigen::VectorXd r0 = y - X * beta;
-    V = std::vector<Eigen::MatrixXd>(n);
-    Eigen::MatrixXd R = Eigen::MatrixXd::Zero(n,k*t);
+    Eigen::MatrixXd Rt = Eigen::MatrixXd::Zero(k*t,n);
     int current = 0;
     for(int i = 0; i<n; ++i)
     {
@@ -37,234 +22,267 @@ Rcpp::List estimate_V(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
         {
             Rcpp::Rcout << "idxs.size = " << idxs.size() << ", kt0 = " << kt0 << "\n";
         }
-        R(i,idxs) = r0(Eigen::seqN(current,kt0));
+        Rt(idxs,i) = r0(Eigen::seqN(current,kt0));
         current += kt0;
     }
-    Eigen::MatrixXd master_V = covCalc(R,MAP);
-    build_V_list_from_master(V,master_V,MAP,n,k,t);
-    return(Rcpp::List::create(Rcpp::Named("V")=V,Rcpp::Named("R")=R,Rcpp::Named("MasterV")=master_V));
+    masterV = covCalc(Rt.transpose(),MAP);
+
 }
 
-void estimate_D(const Eigen::VectorXd & r0, const std::vector<Eigen::MatrixXd> & Z,
-                Eigen::MatrixXd & D, const Eigen::MatrixXd & E, 
-                const std::vector<Eigen::MatrixXd> & V, const Eigen::MatrixXi & MAP, 
+void estimate_D(const Eigen::VectorXd & r0, 
+                const Eigen::MatrixXd & masterZt,
+                Eigen::MatrixXd & D, 
+                const Eigen::VectorXd & E, 
+                const Eigen::MatrixXd & masterV, 
+                const Eigen::MatrixXi & MAP, 
                 int n, int k, int t)
 {
-    //Eigen::MatrixXd D_minus_E = D - E;
     D = Eigen::MatrixXd::Zero(2*k,2*k);
     Eigen::MatrixXd ZTZ = Eigen::MatrixXd::Zero(2*k,2*k);
+    Eigen::MatrixXd Zti(2*k,k*t), Vi(k*t,k*t);
+    Eigen::VectorXd Et(k*t);
+    Eigen::VectorXi kt_vec = MAP.rowwise().sum();
     for(int i=0; i<n; ++i)
-    {
-        ZTZ += Z[i].transpose() * Z[i];
+    {   
+        int kt = kt_vec(i);
+        if (kt == 0) continue;
+        Z_assemble_IP(masterZt,Zti,MAP,i,k,t,kt);
+        ZTZ += Zti * Zti.transpose();
     }
     for(int i=0; i<n; ++i)
     {
-        Eigen::MatrixXd P = ZTZ.colPivHouseholderQr().solve(Z[i].transpose());
-        D += P * (V[i] - Et_assemble(E, MAP, i, k, t, V[i].rows())) * P.transpose();
-    }
-    Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eigensolver(D);
-    double mineigen = eigensolver.eigenvalues().real().minCoeff();
-    if(mineigen < 0)
-    {
-        D.diagonal() += Eigen::VectorXd::Constant(2*k,abs(mineigen));
+        int kt = kt_vec(i);
+        if (kt == 0) continue;
+        Z_assemble_IP(masterZt,Zti,MAP,i,k,t,kt);
+        Et_assemble_IP(E,Et,MAP,i,k,t,kt);
+        V_assemble_IP(masterV,Vi,MAP,i,k,t,kt);
+        Vi.diagonal() -= Et;
+        Eigen::MatrixXd P = ZTZ.ldlt().solve(Zti);
+        D += P * Vi * P.transpose();
     }
 }
 
-Rcpp::List estimate_D(const Eigen::VectorXd & r0, const std::vector<Eigen::MatrixXd> & Z,
-                const Eigen::MatrixXd & E, 
-                const std::vector<Eigen::MatrixXd> & V, const Eigen::MatrixXi & MAP, 
+//[[Rcpp::export]]
+Rcpp::List estimate_D(const Eigen::VectorXd & r0, 
+                const Eigen::MatrixXd & masterZ,
+                const Eigen::VectorXd & E, 
+                const Eigen::MatrixXd & masterV, const Eigen::MatrixXi & MAP, 
                 int n, int k, int t)
 {
     Eigen::MatrixXd D = Eigen::MatrixXd::Zero(2*k,2*k);
-    estimate_D(r0,Z,D,E,V,MAP,n,k,t);
+    Eigen::MatrixXd masterZt = masterZ.transpose();
+    estimate_D(r0,masterZt,D,E,masterV,MAP,n,k,t);
     return(Rcpp::List::create(Rcpp::Named("D")=D));
 }
 
-Rcpp::List estimate_E(const Eigen::VectorXd & r0, 
-                      const std::vector<Eigen::MatrixXd> & Z,
-                      const Eigen::MatrixXd & D, Eigen::MatrixXd & E, 
-                      const std::vector<Eigen::MatrixXd> & V,
+void estimate_E(const Eigen::VectorXd & r0, 
+                      const Eigen::MatrixXd & masterZt,
+                      const Eigen::MatrixXd & D, 
+                      Eigen::VectorXd & E, 
+                      const Eigen::MatrixXd & masterV,
                       const Eigen::MatrixXi & MAP, 
                       int n, int k, int t)
 {
-    // We only need the diagonals of the ZDZ matrix
-    std::vector<Eigen::MatrixXd> ZDZ(n); //Z * D * Z.transpose();
-    for(int i=0; i<n; ++i)
-    {   
-        // We only need the diagonals of the ZDZ matrix
-        ZDZ[i] = Z[i] * D * Z[i].transpose();
-    }
-    E = Eigen::MatrixXd::Zero(k,k);
-    Eigen::MatrixXd E_tmp = Eigen::MatrixXd::Zero(k,t);
-    Eigen::VectorXd ct = Eigen::VectorXd::Zero(n);
-    for(int i=0;i<k;++i)
-    {
-        for(int j=0;j<t;++j)
+   Eigen::MatrixXd ZDZ = masterZt.transpose() * D * masterZt; // kt x kt
+   Eigen::VectorXd Et = masterV.diagonal() - ZDZ.diagonal();
+   E = Eigen::VectorXd::Zero(k);
+   for(int i = 0; i < k; ++i)
+   {
+        double sum = 0.0;
+        for(int j = 0; j < t; ++j) 
         {
-            int bot = 0;
-            for(int l=0;l<n;++l)
-            {
-                if(MAP(l,i*t + j) == 1)
-                {
-                    Eigen::MatrixXd Vl = V[l];
-                    Eigen::MatrixXd ZDZl = ZDZ[l];
-                    bot++;
-                    // Just the most recent time for subject l
-                    double B = Vl.coeff(ct(l),ct(l));
-                    double C = ZDZl.coeff(ct(l),ct(l));
-                    E_tmp(i,j) = E_tmp(i,j) + B - C; //((double) E_tmp(i,j)) + ((double) Vl(i*k+ct(l),i*k+ct(l)) - ZDZ(l*n + i*k + ct(l),l*n + i*k + ct(l));)
-                    ct(l)++;
-                }
-            }
-            if(E_tmp(i,j) <= 0)
-            {
-                E_tmp(i,j) = (1.0)/(n*k);
-            }
-            else
-            {
-                E_tmp(i,j) /= bot;
+            double sgma_tmp = Et(i*t + j);
+            
+            // Clamp individual timepoints
+            if (sgma_tmp > 0.0) {
+                sum += sgma_tmp;
+            } else {
+                sum += 1.0 / (n * k); 
             }
         }
-
-        E(i,i) = E_tmp(i,Eigen::all).mean();
-    }
-    Rcpp::List ZDZ_list(n);
-    vec2list(ZDZ,ZDZ_list);
-    return(Rcpp::List::create(Rcpp::Named("E")=E,Rcpp::Named("E")=E,Rcpp::Named("ZDZ")=ZDZ_list));
+        
+        // Average the clamped values
+        E(i) = sum / t;
+   }
 }
 
-
-Rcpp::List estimate_E(const Eigen::VectorXd & r0, const Rcpp::List & Z,
-                      const Eigen::MatrixXd & D, Eigen::MatrixXd & E, 
-                      const std::vector<Eigen::MatrixXd> & V, 
+//[[Rcpp::export]]
+Rcpp::List estimate_E(const Eigen::VectorXd & r0, const Eigen::MatrixXd & masterZ,
+                      const Eigen::MatrixXd & D, 
+                      const Eigen::MatrixXd & masterV, 
                       const Eigen::MatrixXi & MAP, 
                       int n, int k, int t)
   
 {
-    std::vector<Eigen::MatrixXd> Z_vec(n);
-    list2vec(Z_vec,Z);
-    return(estimate_E(r0,Z_vec,D,E,V,MAP,n,k,t));
+    Eigen::VectorXd E(k);
+    Eigen::MatrixXd masterZt = masterZ.transpose();
+    estimate_E(r0,masterZt,D,E,masterV,MAP,n,k,t);
+    return(Rcpp::List::create(Rcpp::Named("E")=E));
 }
 
-void thresholdRange(const Eigen::MatrixXd & R, Eigen::ArrayXXd& theta, Eigen::MatrixXd& cov, const Eigen::MatrixXi & MAP, double & lower, double & upper)
+
+void thresholdRange(const Eigen::MatrixXd & R, Eigen::ArrayXXd& theta, Eigen::MatrixXd& cov, 
+                    const Eigen::MatrixXi & MAP, double & lower, double & upper)
 {
     int n = R.rows();
     int p = R.cols();
     cov = covCalc(R,MAP);
 
-    theta = (RtR(R,MAP) - cov.array().pow(2).matrix()).array().sqrt();
-    Eigen::MatrixXd delta = (cov.array() / theta).cwiseAbs().matrix();
-    delta.diagonal() = Eigen::VectorXd::Zero(p);
+    // Prevent NaN from sqrt(negative floating point noise)
+    theta = (RtR(R, MAP) - cov.array().square().matrix()).array().max(0.0).sqrt();
+    
+    Eigen::ArrayXXd safe_theta = (theta == 0.0).select(1e-8, theta);
+    Eigen::MatrixXd delta = (cov.array() / safe_theta).cwiseAbs().matrix();
+    delta.diagonal() = Eigen::VectorXd::Zero(delta.rows());
+    
     upper = delta.maxCoeff();
-    lower = (delta.array() <= 0.f).select(std::numeric_limits<int>::max(), delta).minCoeff();
-    /*return(Rcpp::List::create(Rcpp::Named("theta")=theta,
-                              Rcpp::Named("upper")=upper,
-                              Rcpp::Named("lower")=lower,
-                              Rcpp::Named("delta")=delta));*/
+    lower = (delta.array() <= 0.0).select(std::numeric_limits<double>::max(), delta).minCoeff();
+    if (lower == std::numeric_limits<double>::max()) lower = 0.0;
 }
 
-void threshold(const Eigen::MatrixXd& abscov, const Eigen::MatrixXd& signcov, const Eigen::MatrixXd& thetalambda, Eigen::MatrixXd& sigma_out)
+void threshold(const Eigen::MatrixXd& abscov, const Eigen::MatrixXd& signcov, double lambda,
+               const Eigen::ArrayXXd& theta, Eigen::MatrixXd& sigma_out)
 {
     int p = abscov.rows();
-    Eigen::MatrixXd covOffDiag = abscov;
-    covOffDiag.diagonal() = Eigen::VectorXd::Zero(p);
-    Eigen::MatrixXd thetaOffDiag = thetalambda;
-    thetaOffDiag.diagonal() = Eigen::VectorXd::Zero(p);
-    Eigen::MatrixXd sigmaTmp = covOffDiag - thetaOffDiag;
-
-    for (int i=0;i<p; ++i)
-    {
-      for(int j=0;j<i; ++j)
-      {
-        //if(i == j) continue;
-        if(sigmaTmp(i,j) < 0)
-        {
-          sigmaTmp(i,j) = 0;
-          sigmaTmp(j,i) = 0;
-        }
-      }
-    }
     
-    sigma_out = sigmaTmp.cwiseProduct(signcov);;
-    sigma_out.diagonal() += abscov.diagonal();
-    /*return(Rcpp::List::create(Rcpp::Named("sigma")=sigma_out,
-                              Rcpp::Named("sigmaTmp")=sigmaTmp,
-                              Rcpp::Named("sigmaTmpDiag")=sigmaTmpDiag,
-                              Rcpp::Named("diag_zeros")=diag_zeros));*/
+    // Loop through the matrix without allocating any temporary arrays
+    for(int i = 0; i < p; ++i) 
+    {
+        double diag_diff_i = abscov(i,i);
+        for(int j = 0; j < p; ++j) 
+        {
+            double val = abscov(i, j) - theta(i, j) * lambda;
+            sigma_out(i, j) = std::max(0.0, val) * signcov(i, j);
+        }
+        sigma_out(i, i) = std::max(0.0, diag_diff_i);
+    }
 }
 
+
 void threshold_V(const Eigen::MatrixXd & R, Eigen::MatrixXd& sigma, 
-                 Eigen::ArrayXXd & theta, const Eigen::MatrixXi & MAP, int n_fold=5)
+                 Eigen::ArrayXXd & theta, const Eigen::MatrixXi & MAP, 
+                 int n_fold=5, int seed=11232)
 {
+    auto rng = std::default_random_engine(seed);
+
     int n = R.rows();
     int p = R.cols();
+
+    // Dynamic Fold Adjustment for Subsets
+    int actual_folds = std::min(n_fold, n);
+    
+    // Bailing out safely if the subset is extremely small (1 subject)
+    if (actual_folds < 2) {
+        Eigen::MatrixXd cov = covCalc(R, MAP);
+        Eigen::MatrixXd covAbs = cov.cwiseAbs();
+        Eigen::MatrixXd covSign = cov.cwiseSign();
+        threshold(covAbs, covSign, 1.0, theta, sigma);
+        return; 
+    }
+
     int nParam = 100;
     Eigen::MatrixXd cov(p,p);
     double lower = 0.0;
     double upper = 0.0;
+    sigma.setZero(p,p);
+    
+    // 1. Pre-calculate the TOTAL dataset aggregates ONCE
+    std::vector<int> all_idx(n);
+    std::iota(all_idx.begin(), all_idx.end(), 0);
+    
+    Eigen::MatrixXd SumXY_tot, N_tot, SumX_shared_tot, SumRsq_tot;
+    get_cov_stats(R, MAP, all_idx, SumXY_tot, N_tot, SumX_shared_tot, SumRsq_tot);
+    // Build the master baseline cov and theta
+    build_cov_and_theta(SumXY_tot, N_tot, SumX_shared_tot, SumRsq_tot, cov, theta);
+    get_bounds(cov, theta, lower, upper);
 
-    thresholdRange(R,theta,cov,MAP,lower,upper);
     std::vector<double> params(nParam);
     double jump = (upper - lower)/double(nParam);
     double ctr = lower;
     std::generate(params.begin(), params.end(), [&ctr,&jump]{ return ctr+=jump;});
-    auto rng = std::default_random_engine{};
+    
     std::vector<int> part(n);
     std::iota(part.begin(), part.end(), 0);
     std::shuffle(part.begin(),part.end(), rng);
-    Eigen::MatrixXd error(n_fold,nParam);
+
+    Eigen::MatrixXd error = Eigen::MatrixXd::Zero(actual_folds,nParam);
+    Eigen::MatrixXd covTest;
+    Eigen::MatrixXd covTrain(p,p);
+    Eigen::ArrayXXd thetaTrain(p,p);
+
     for (int i=0;i<part.size();++i)
     {
-        part[i] = part[i] % n_fold;
+        part[i] = part[i] % actual_folds;
     }
-    for (int i =0;i<n_fold; ++i)
+    for (int i=0;i<actual_folds; ++i)
     {
         std::vector<int> val_idx;
-        std::vector<int> not_val_idx;
-        find_all(part,i,val_idx,not_val_idx);
-        Eigen::MatrixXd covTest = covCalc(R(val_idx,Eigen::all),MAP(val_idx,Eigen::all));
-        double lower = 0.0;
-        double upper = 0.0;
-        Eigen::MatrixXd absCovTrain(p,p);
-        Eigen::ArrayXXd thetaTrain(p,p);
-    thresholdRange(R(not_val_idx,Eigen::all),thetaTrain,absCovTrain,MAP(not_val_idx,Eigen::all),lower,upper);
-        Eigen::ArrayXXd signCovTrain = absCovTrain.cwiseSign(); //absCovTrain.array() / absCovTrain.cwiseAbs().array();
-        absCovTrain = absCovTrain.cwiseAbs();
+        std::vector<int> not_val_idx; // We keep this for find_all, but we NEVER use it!
+        find_all(part, i, val_idx, not_val_idx);
+        
+        // A. Process ONLY the tiny 20% test fold
+        Eigen::MatrixXd SumXY_test, N_test, SumX_shared_test, SumRsq_test;
+        get_cov_stats(R, MAP, val_idx, SumXY_test, N_test, SumX_shared_test, SumRsq_test);
+        
+        // B.Derive the 80% train fold instantly via subtraction!
+        Eigen::MatrixXd SumXY_train = SumXY_tot - SumXY_test;
+        Eigen::MatrixXd N_train = N_tot - N_test;
+        Eigen::MatrixXd SumX_shared_train = SumX_shared_tot - SumX_shared_test;
+        Eigen::MatrixXd SumRsq_train = SumRsq_tot - SumRsq_test;
+        
+        // C. Build the matrices
+        Eigen::ArrayXXd dummy_thetaTest; // Not used, just needed for the function
+        build_cov_and_theta(SumXY_test, N_test, SumX_shared_test, SumRsq_test, covTest, dummy_thetaTest);
+        build_cov_and_theta(SumXY_train, N_train, SumX_shared_train, SumRsq_train, covTrain, thetaTrain);
+        
+        // D. OpenMP Loop
+        std::vector<Eigen::MatrixXd> local_sigmas(nParam, Eigen::MatrixXd::Zero(p, p));
+        Eigen::MatrixXd covTrainAbs = covTrain.cwiseAbs();
+        Eigen::MatrixXd covTrainSign = covTrain.cwiseSign();
+
+        #pragma omp parallel for
         for(int j=0;j<nParam;++j)
         {
-            //Eigen::MatrixXd thetalambda = params[j] * thetaTrain;
-            Eigen::MatrixXd sigmaTrain(p,p);
-            threshold(absCovTrain,signCovTrain,params[j] * thetaTrain,sigmaTrain);
-            error(i,j) = (sigmaTrain - covTest).norm();
+            threshold(covTrainAbs,covTrainSign,params[j],thetaTrain,local_sigmas[j]);
+            // Calculate the norm manually. (local_sigmas - covTest).norm() 
+            // forces Eigen to create a temporary matrix, which would crash R!
+            double sq_err = 0.0;
+            for(int r = 0; r < p; ++r) {
+                for(int c = 0; c < p; ++c) {
+                    double diff = local_sigmas[j](r,c) - covTest(r,c);
+                    sq_err += diff * diff;
+                }
+            }
+            // Catch NaN or Infinity before it infects the error matrix
+            if (std::isnan(sq_err) || std::isinf(sq_err)) 
+            {
+                // Penalize this threshold heavily so it is never picked as the minimum,
+                // but keep it as a finite double so it doesn't break the column sum!
+                error(i,j) = std::numeric_limits<double>::max() / 10000.0; 
+            } 
+            else 
+            {
+                error(i,j) = std::sqrt(sq_err);
+            }
         }
     }
     Eigen::Index minIndex;
     error.colwise().sum().minCoeff(&minIndex);
-    Eigen::ArrayXXd absCov = cov.cwiseAbs();
-    Eigen::ArrayXXd signCov = cov.cwiseSign(); // cov.array() / absCov;
 
-    /*Rcpp::Rcout << "err" << "\n";
-    Rcpp::Rcout << error.colwise().sum() << "\n";
-    Rcpp::Rcout << "theta " << printdims(theta) << "\n";
-    Rcpp::Rcout << params[minIndex] * theta(Eigen::seqN(0,5), Eigen::seqN(0,5)) << "\n";
-
-    Rcpp::Rcout << "abscov" << printdims(absCov) << "\n";
-    Rcpp::Rcout << absCov(Eigen::seqN(0,5), Eigen::seqN(0,5)) << "\n";*/
-
-    threshold(absCov,signCov,params[minIndex] * theta,sigma);
-
-    //Rcpp::Rcout << "theta" << printdims(theta) << "\n";
-    //Rcpp::Rcout << theta(Eigen::seqN(0,5), Eigen::seqN(0,5)) << "\n";
-    //return(Rcpp::List::create(Rcpp::Named("V") = sigma));
+    Eigen::MatrixXd covAbs = cov.cwiseAbs();
+    Eigen::MatrixXd covSign = cov.cwiseSign();
+    threshold(covAbs,covSign,params[minIndex],theta,sigma);
+    auto t4 = std::chrono::high_resolution_clock::now();
+    theta = params[minIndex] * theta;
 }
 
-Rcpp::List calc_ZDZ_wrapper(const std::vector<Eigen::MatrixXd>& Z, //Matrix<double, -1,-1,Eigen::RowMajor> & Z, 
+Rcpp::List calc_ZDZ_wrapper(const Eigen::MatrixXd & masterZ, 
                             const Eigen::MatrixXd & D, const Eigen::VectorXd & E,
                             const Eigen::MatrixXi & MAP,
                             int n, int k, int t)
 {
     std::vector<Eigen::MatrixXd> out(n);
-    calc_ZDZ_plus_E_list(Z,D,E,out,MAP,n,k,t);
+    calc_ZDZ_plus_E_list(masterZ,D,E,out,MAP,n,k,t);
     return(Rcpp::List::create(Rcpp::Named("Sigma")=out));
 }
 
@@ -274,56 +292,51 @@ Rcpp::List threshold_D(Eigen::MatrixXd & D, double nonzero_pct)
     
     int cutoff = std::round(p*p*nonzero_pct) - 1;
     Eigen::VectorXd DoffVecSorted = D.cwiseAbs().reshaped();
-    std::sort(DoffVecSorted.begin(), DoffVecSorted.end(), [](double const& t1, double const& t2){ return t1 > t2; } );
-    double threshold = cutoff == 0 ? 0 : DoffVecSorted[cutoff];
+    std::sort(DoffVecSorted.begin(), DoffVecSorted.end(), std::greater<double>() );
+    double threshold = cutoff <= 0 ? 0 : DoffVecSorted(cutoff);
     Eigen::MatrixXd thresholdMat = Eigen::MatrixXd::Constant(p,p,1.0) * threshold;
     Eigen::MatrixXd D_tmp = D.cwiseAbs() - thresholdMat;
 
-    for (int i=0;i<p; ++i)
+    for(int i=0;i<p; ++i)
     {
         for(int j=0;j<p; ++j)
         {
             if(D_tmp(i,j) < 0)
             {
-                D_tmp(i,j) = 0;
+                D(i,j) = 0;
             }
         }
     }
-    D = D_tmp.cwiseProduct(D.cwiseSign());
     return(Rcpp::List::create(Rcpp::Named("D")=D));
 }
 
-void initial_estimates(const Eigen::MatrixXd & X, const Eigen::VectorXd & y, 
-                       Eigen::VectorXd & r_out, Eigen::VectorXd & beta, 
-                       std::vector<Eigen::MatrixXd> & Sigma_list, 
-                       const Eigen::MatrixXi & MAP,
-                       int n, int k, int t)
+int initial_estimates(const Eigen::MatrixXd & X, 
+                      const Eigen::VectorXd & y, 
+                      Eigen::VectorXd & r_out, 
+                      Eigen::VectorXd & beta, 
+                      Eigen::MatrixXd & masterV, 
+                      const Eigen::MatrixXi & MAP,
+                      int n, int k, int t)
 {
     int p = X.cols();
-    beta = (X.transpose() * X).llt().solve(X.transpose()) * y;
+    beta = (X.transpose() * X).colPivHouseholderQr().solve(X.transpose() * y);
     r_out = y - X * beta;
-    /*Rcpp::Rcout << printdims(r_out) << "\n";
-    Rcpp::Rcout << r_out(Eigen::seqN(0,5)) << "\n";*/
-    Eigen::MatrixXd R = Eigen::MatrixXd::Zero(n,k*t);
+
+    Eigen::MatrixXd Rt = Eigen::MatrixXd::Zero(k*t,n);
+    Eigen::MatrixXi kt_vec = MAP.rowwise().sum();
     int current = 0;
     for(int i = 0; i<n; ++i)
     {
-        int kt0 = MAP.rowwise().sum()(i);
+        int kt = kt_vec(i);
         std::vector<int> idxs;
         std::vector<int> waste;
         find_all(MAP(i,Eigen::all),1,idxs,waste);
-        R(i,idxs) = r_out(Eigen::seqN(current,kt0));
-        current += kt0;
+        Rt(idxs,i) = r_out(Eigen::seqN(current,kt));
+        current += kt;
     }
 
-    //Rcpp::Rcout << "initial cov calc next" << "\n";
-    Eigen::MatrixXd cov_int = covCalc(R,MAP);
-    //Rcpp::Rcout << "build v list from master next" << "\n";
-    build_V_list_from_master(Sigma_list, cov_int, MAP, n, k, t);
-    /*Rcpp::Rcout << "master V" << printdims(cov_int) << "\n";
-    Rcpp::Rcout << cov_int(Eigen::seqN(0,5),Eigen::seqN(0,5)) <<  "\n";
-    Rcpp::Rcout << "V" << printdims(Sigma_list[1]) << "\n";
-    Rcpp::Rcout << Sigma_list[1](Eigen::seqN(0,5),Eigen::seqN(0,5)) <<  "\n";*/
+    masterV = covCalc(Rt.transpose(),MAP);
+    return current;
     
 }
 
@@ -333,86 +346,76 @@ Rcpp::List initial_estimates(const Eigen::MatrixXd & X, const Eigen::VectorXd & 
 {
     int p = X.cols();
     std::vector<Eigen::MatrixXd> Sigma_list(n);
+    Eigen::MatrixXd masterV(k*t,k*t);
     Eigen::VectorXd beta(p);
     Eigen::VectorXd r_out(nkt);
-    initial_estimates(X,y,r_out,beta,Sigma_list,MAP,n,k,t);
+    initial_estimates(X,y,r_out,beta,masterV,MAP,n,k,t);
+    build_V_list_from_master(Sigma_list,masterV,MAP,n,k,t);
     return(Rcpp::List::create(Rcpp::Named("Sigma_list")=Sigma_list, 
                               Rcpp::Named("beta")=beta,Rcpp::Named("r")=r_out));
 }
 
-int estimate_DE(Eigen::VectorXd& r0, const std::vector<Eigen::MatrixXd> & Z, 
-                std::vector<Eigen::MatrixXd> & Sigma_list, const Eigen::MatrixXi & MAP, 
-                int n, int k, int t, double V_nonzeros_pct, int max_itr, 
-                Eigen::MatrixXd & E, Eigen::MatrixXd & D,
-                double convergence_cutoff=0.00005)
+int estimate_DE(Eigen::VectorXd& r0, 
+                const Eigen::MatrixXd & masterZt, 
+                Eigen::MatrixXd & masterV, 
+                const Eigen::MatrixXi & MAP, 
+                int n, int k, int t, 
+                double V_nonzeros_pct, int max_itr, 
+                Eigen::VectorXd & E, Eigen::MatrixXd & D,
+                double convergence_cutoff=0.00005,
+                bool timings=false)
 {
     D = Eigen::MatrixXd::Identity(2*k,2*k) * 0.0005;
-    //Eigen::MatrixXd E_tmp = Eigen::MatrixXd::Identity(k,k) * 0.5; 
-    E = Eigen::MatrixXd::Identity(k,k); 
+    E = Eigen::VectorXd::Constant(k, 1.0);
     double err = 10.;
     double prev_err = 10.;
     int n_itr = 0;
 
     while (((err > convergence_cutoff) || (prev_err > convergence_cutoff)) && (n_itr < max_itr))
     {
-        Eigen::MatrixXd D_prev = D;
-        Eigen::MatrixXd E_prev = E; //E_tmp;
+        // Give control back to R to check for Esc/Ctrl+C
+        Rcpp::checkUserInterrupt();
 
-        /*estimate_D(r0,Z,D,E_tmp,Sigma_list,MAP,n,k,t);
-        estimate_E(r0,Z,D,E_tmp,Sigma_list,MAP,n,k,t);*/
-        estimate_D(r0,Z,D,E,Sigma_list,MAP,n,k,t);
-        estimate_E(r0,Z,D,E,Sigma_list,MAP,n,k,t);
+        Eigen::MatrixXd D_prev = D;
+        Eigen::VectorXd E_prev = E; //E_tmp;
+
+        auto t1 = std::chrono::high_resolution_clock::now();
+        estimate_D(r0,masterZt,D,E,masterV,MAP,n,k,t);
+        auto t2 = std::chrono::high_resolution_clock::now();
+        estimate_E(r0,masterZt,D,E,masterV,MAP,n,k,t);
+        auto t3 = std::chrono::high_resolution_clock::now();
+
+         if(timings)
+        {
+            double time_D = std::chrono::duration<double, std::milli>(t2 - t1).count();
+            double time_E = std::chrono::duration<double, std::milli>(t3 - t2).count();
+            
+            Rcpp::Rcout << "--- Iteration  " << n_itr << " Timings (ms) ---" << std::endl;
+            Rcpp::Rcout << "estimate_D:    " << time_D << " ms" << std::endl;
+            Rcpp::Rcout << "estimate_E:    " << time_E << " ms" << std::endl;
+        }
 
         prev_err = err;
-        //err = ((D - D_prev).squaredNorm() / (4*k^2) + (E_tmp - E_prev).squaredNorm() / k) / 2;
-        err = ((D - D_prev).squaredNorm() / (4*k^2) + (E - E_prev).squaredNorm() / k) / 2;
+        err = ((D - D_prev).squaredNorm() / (D_prev.squaredNorm()) + (E - E_prev).squaredNorm() / E_prev.squaredNorm()) / 2;
         n_itr++;
-        /*Rcpp::Rcout << "itr " << n_itr-1 << ": " << err << "\n";
-        Rcpp::Rcout << "D" << printdims(D) << "\n";
-        Rcpp::Rcout << D(Eigen::seqN(0,5),Eigen::seqN(0,5)) <<  "\n";
-        Rcpp::Rcout << "E" << printdims(E) << "\n";
-        Rcpp::Rcout << E(Eigen::seqN(0,5),Eigen::seqN(0,5)) <<  "\n";*/
     }
 
-    //E = Eigen::MatrixXd::Zero(k,k);
-    //big_to_small_E(E_tmp, E, MAP, n, k, t);
-
     threshold_D(D,V_nonzeros_pct);
-    /*Rcpp::Rcout << "V_nonzeros: " << V_nonzeros_pct << "\n";
-    Rcpp::Rcout << "D" << printdims(D) << "\n";
-    Rcpp::Rcout << D(Eigen::seqN(0,5),Eigen::seqN(0,5)) <<  "\n";
-    Rcpp::Rcout << "E" << printdims(E) << "\n";
-    Rcpp::Rcout << E(Eigen::seqN(0,5),Eigen::seqN(0,5)) <<  "\n";*/
 
     return((n_itr < (max_itr-1)));
 }
 
-double sigma_norm_diff(const std::vector<Eigen::MatrixXd> & A,const std::vector<Eigen::MatrixXd> & B, int n)
-{
-  double out = 0;
-  for(int i=0; i<n; ++i)
-  {
-    out += (A[i] - B[i]).squaredNorm();
-  }
-  return(out);
-}
 
-double sigma_norm(const std::vector<Eigen::MatrixXd> & A, int n)
-{
-    double out = 0;
-    for(int i=0; i<n; ++i)
-    {
-        out += A[i].squaredNorm();
-    }
-    return(out);
-}
-
-int estimate_betaV(const Eigen::MatrixXd & X, const Eigen::VectorXd & y, 
-                   Eigen::VectorXd & beta, std::vector<Eigen::MatrixXd> & V, 
+int estimate_betaV(const Eigen::MatrixXd & X, 
+                   const Eigen::VectorXd & y, 
+                   Eigen::VectorXd & beta, 
                    Eigen::MatrixXd & masterV,
                    const Eigen::MatrixXi & MAP, const Eigen::VectorXi kt_vec, 
                    int n, int k, int t, int max_itr,
-                   double convergence_cutoff=5*pow(10,-4))
+                   int n_fold=5, int seed=1121,
+                   double convergence_cutoff=5*pow(10,-4),
+                   bool timings=false,
+                   bool verbose=false)
 {
     int p = X.cols();
     beta = (X.transpose() * X).colPivHouseholderQr().solve(X.transpose()) * y;
@@ -423,100 +426,92 @@ int estimate_betaV(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
 
     while (((err > convergence_cutoff) || (prev_err > convergence_cutoff)) && (n_itr < max_itr))
     {
+        // Give control back to R to check for Esc/Ctrl+C
+        Rcpp::checkUserInterrupt();
+
         Eigen::VectorXd beta_prev = beta;
-        std::vector<Eigen::MatrixXd> V_prev = V;
+        Eigen::MatrixXd masterV_prev = masterV;
 
-        estimate_beta(X,y,kt_vec,MAP,V,beta,n,k,t);
-        estimate_V(X,y,V,beta,MAP,n,k,t);
+        auto t1 = std::chrono::high_resolution_clock::now();
+        estimate_beta(X,y,kt_vec,MAP,masterV,beta,n,k,t,verbose);
+        auto t2 = std::chrono::high_resolution_clock::now();
+        estimate_V(X,y,masterV,beta,MAP,n,k,t);
+        auto t3 = std::chrono::high_resolution_clock::now();
 
+        if(timings)
+        {
+            double time_beta = std::chrono::duration<double, std::milli>(t2 - t1).count();
+            double time_V    = std::chrono::duration<double, std::milli>(t3 - t2).count();
+            
+            Rcpp::Rcout << "--- Iteration   " << n_itr << " Timings (ms) ---" << std::endl;
+            Rcpp::Rcout << "estimate_beta:  " << time_beta << " ms" << std::endl;
+            Rcpp::Rcout << "estimate_V:     " << time_V << " ms" << std::endl;
+        }
         prev_err = err;
-        err = ((beta - beta_prev).squaredNorm() / beta_prev.squaredNorm() + (sigma_norm_diff(V,V_prev,n)/ sigma_norm(V_prev,n))) / 2;
+        err = ((beta - beta_prev).squaredNorm() / beta_prev.squaredNorm() + ((masterV - masterV_prev).squaredNorm()) / masterV_prev.squaredNorm())/2;
         all_err[n_itr] = err;
+        if(verbose)
+        {
+            Rcpp::Rcout << "Iteration " << n_itr << ": err = " << err << ", prev_err = " << prev_err << std::endl;
+            Rcpp::Rcout << "beta" << beta.transpose() << std::endl;
+            Rcpp::Rcout << "masterV" << masterV(Eigen::seqN(0,5),Eigen::seqN(0,5)) << std::endl;
+        }
+
         n_itr++;
     }
 
-    masterV = Eigen::MatrixXd::Zero(t*k,t*k);
     Eigen::ArrayXXd theta = Eigen::ArrayXXd::Zero(2*k,2*k);
-    Eigen::MatrixXd R = Eigen::MatrixXd::Zero(n,k*t);
+    Eigen::MatrixXd Rt = Eigen::MatrixXd::Zero(k*t,n);
     Eigen::VectorXd r0 = y - X * beta;
     int current = 0;
-    
     for(int i = 0; i<n; ++i)
     {
-      int kt0 = MAP.rowwise().sum()(i);
+      int kt = kt_vec(i);
+      if(kt == 0) continue;
       std::vector<int> idxs;
       std::vector<int> waste;
       find_all(MAP(i,Eigen::all),1,idxs,waste);
-      R(i,idxs) = r0(Eigen::seqN(current,kt0));
-      current += kt0;
+      Rt(idxs,i) = r0(Eigen::seqN(current,kt));
+      current += kt;
     }
     
-    threshold_V(R,masterV,theta,MAP);
-    build_V_list_from_master(V,masterV,MAP,n,k,t);
+    threshold_V(Rt.transpose(),masterV,theta,MAP,n_fold,seed);
     return((n_itr < (max_itr-1)));
 }
 
 
 // [[Rcpp::export]]
-Rcpp::List estimate_all(const Eigen::MatrixXd & X, const Eigen::VectorXd & y, 
-                        const Rcpp::List & Z_in, int n, int k, int t, 
+Rcpp::List estimate_all(const Eigen::MatrixXd & X, 
+                        const Eigen::VectorXd & y, 
+                        const Eigen::MatrixXd & masterZ, 
+                        const Eigen::MatrixXi & MAP,
+                        int n, int k, int t, 
                         int max_itr=250,
                         double convergence_cutoff=0.00005,
-                        bool REML=false)
+                        bool REML=false,
+                        int n_fold=5, 
+                        bool timings=false,
+                        bool verbose=false,
+                        int seed=1121)
 {
     int p = X.cols();
-    std::vector<Eigen::MatrixXd> Sigma_vec(n);
-    std::vector<Eigen::MatrixXd> Z(n);
-    list2vec(Z,Z_in);
-    Rcpp::List Sigma_list(n);
     Eigen::MatrixXd D = Eigen::MatrixXd::Zero(2*k,2*k);
-    Eigen::MatrixXd E = Eigen::MatrixXd::Zero(k,k);
+    Eigen::VectorXd E = Eigen::VectorXd::Zero(k);
     Eigen::MatrixXd masterV = Eigen::MatrixXd::Zero(k*t,k*t);
     Eigen::VectorXd beta(p);
     //X, y, Z, r_out, beta, Sigma_list, MAP,
-    Eigen::MatrixXd masterZ(k*t,2*k);
-    Eigen::MatrixXi MAP = Eigen::MatrixXi::Zero(k*t,2*k);
+    Eigen::MatrixXd masterZt = masterZ.transpose();
     Eigen::VectorXd r0;
     
-    int nkt = make_MAP(Z,masterZ,MAP,r0,n,k,t);
-    
-    /*Rcpp::Rcout << "Z0" << "\n"; //<< printdims(Z[0]) << "\n";
-    Rcpp::Rcout << Z[0] << "\n";
 
-    Rcpp::Rcout << "MAP(" << MAP.rows() << "," << MAP.cols() << ")" << "\n";
-    Rcpp::Rcout << MAP <<  "\n";
-
-    Rcpp::Rcout << "times(" << times.size() << ")" << "\n";
-    Rcpp::Rcout << printvec(times) <<  "\n";
-
-    Rcpp::Rcout << "MAP(" << MAP.rows() << "," << MAP.cols() << ")" << "\n";
-    Rcpp::Rcout << MAP(Eigen::seqN(0,5),Eigen::seqN(0,20)) <<  "\n";*/
-
-    initial_estimates(X,y,r0,beta,Sigma_vec,MAP,n,k,t);
-    //Sigma_list = init_est[0];
-    //beta = init_est[1];
-    //r0 = init_est[2];
-    //Rcpp::Rcout << "4.5" << "\n";
-    int converged = estimate_betaV(X,y,beta,Sigma_vec,masterV,MAP,MAP.rowwise().sum(),n,k,t,max_itr,convergence_cutoff);
-    //Rcpp::Rcout << "converged = " << converged << "\n";
+    auto t0 = std::chrono::high_resolution_clock::now();
+    int nkt = initial_estimates(X,y,r0,beta,masterV,MAP,n,k,t);
+    auto t1 = std::chrono::high_resolution_clock::now();
+    int converged = estimate_betaV(X,y,beta,masterV,MAP,MAP.rowwise().sum(),n,k,t,max_itr,n_fold,seed,convergence_cutoff,timings,verbose);
+    auto t2 = std::chrono::high_resolution_clock::now();
     double V_nonzeros_pct = 0;
     int denom = 0;
-    /*for(int i=0; i<n; ++i)
-    {
-        int kt0 = Z[i].rows();
-        for(int j=0; j<kt0; ++j)
-        {
-            for(int l=0;l<=j;++l)
-            {
-                //Rcpp::Rcout << "Sigma [" << i << "] is (" << Sigma_vec[i].rows() << " x " << Sigma_vec[i].cols() << ")\n";
-                if(Sigma_vec[i](j,l) != 0)
-                {
-                    V_nonzeros_pct++;
-                }
-                denom++;
-            }
-        }
-    }*/
+   
     for(int j=0; j<masterV.rows(); ++j)
     {
         for(int l=0;l<=j;++l)
@@ -528,21 +523,23 @@ Rcpp::List estimate_all(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
             denom++;
         }
     }
-    //Rcpp::Rcout << "6" << "\n";
     V_nonzeros_pct /= denom;
-    //Rcpp::Rcout << "V_nonzeros_pct = " << V_nonzeros_pct << " (denom = " << denom << ")\n";
     r0 = y - X * beta;
-    // Eigen::VectorXd& r0, const Eigen::MatrixXd & Z, std::vector<Eigen::MatrixXd> & Sigma_list, 
-    // const Eigen::MatrixXi & MAP, int n, int k, int t, double V_nonzeros_pct, int max_itr, 
-    // Eigen::MatrixXd & E, Eigen::MatrixXd & D
-    converged += 3*estimate_DE(r0,Z,Sigma_vec,MAP,n,k,t,V_nonzeros_pct,max_itr,E,D,convergence_cutoff);
-    //Rcpp::Rcout << "converged = " << converged << "\n";
-    Rcpp::List Sigma = Rcpp::wrap(Sigma_vec); //(n); 
-    //vec2list(Sigma_vec, Sigma);
+    auto t3 = std::chrono::high_resolution_clock::now();
+    converged += 3*estimate_DE(r0,masterZt,masterV,MAP,n,k,t,V_nonzeros_pct,max_itr,E,D,convergence_cutoff,timings);
+    auto t4 = std::chrono::high_resolution_clock::now();
 
-    //Rcpp::Rcout << "Sigma" << "\n"; //<< printdims(Z[0]) << "\n";
-    //Rcpp::Rcout << Sigma[1] << "\n";`
-    //Rcpp::Rcout << Sigma_vec[0] << "\n";
+    if(timings)
+    {
+        double time_init = std::chrono::duration<double, std::milli>(t1 - t0).count();
+        double time_betaV = std::chrono::duration<double, std::milli>(t2 - t1).count();
+        double time_DE    = std::chrono::duration<double, std::milli>(t4 - t3).count();
+        
+        Rcpp::Rcout << "------ Overall Timings (ms) ------" << std::endl;
+        Rcpp::Rcout << "estimate_init:  " << time_init << " ms" << std::endl;
+        Rcpp::Rcout << "estimate_betaV: " << time_betaV << " ms" << std::endl;
+        Rcpp::Rcout << "estimate_DE:    " << time_DE << " ms" << std::endl;
+    }
 
     return(Rcpp::List::create(Rcpp::Named("Sigma")=masterV,
            Rcpp::Named("E") = E,Rcpp::Named("D") = D, 

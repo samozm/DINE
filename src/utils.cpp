@@ -65,12 +65,24 @@ Eigen::ArrayXi loc_a_in_b(double a, const Eigen::VectorXd & b)
     return(out_vec);
 }
 
-void build_V_list_from_master(std::vector<Eigen::MatrixXd> & V, const Eigen::MatrixXd & master, const Eigen::MatrixXi & MAP, int n, int k, int t)
+void build_V_list_from_master(std::vector<Eigen::MatrixXd> & V, const Eigen::MatrixXd & masterV, const Eigen::MatrixXi & MAP, int n, int k, int t)
 {
-  for(int i=0; i<n; ++i)
-  {
-    int kt0 = MAP.rowwise().sum()(i);
-    V[i] = Eigen::MatrixXd::Zero(kt0,kt0);
+    Eigen::MatrixXi kt_vec = MAP.rowwise().sum();
+    for(int i=0; i<n; ++i)
+    {
+        int kt = kt_vec(i);
+        Eigen::MatrixXd Vi(kt,kt);
+        V_assemble_IP(masterV,Vi,MAP,i,k,t,kt);
+        V[i] = Vi;
+    }
+}
+
+void V_assemble_IP(const Eigen::Ref<const Eigen::MatrixXd> & masterV, 
+                   Eigen::MatrixXd & V_out,
+                   const Eigen::Ref<const Eigen::MatrixXi> & MAP,
+                   int i, int k, int t, int kt)
+{
+    V_out.setZero(kt,kt);
     int cnt0 = 0; 
     for(int j=0; j<(k*t);++j)
     {
@@ -81,14 +93,13 @@ void build_V_list_from_master(std::vector<Eigen::MatrixXd> & V, const Eigen::Mat
             {
                 if(MAP(i,l) == 1)
                 {
-                    V[i](cnt0,cnt1) = master(j,l);
+                    V_out(cnt0,cnt1) = masterV(j,l);
                     cnt1++;
                 }
             }
             cnt0++;
         }
     }
-  }
 }
 
 
@@ -100,7 +111,7 @@ Eigen::MatrixXd covCalc(const Eigen::MatrixXd & X)
 }
 
 // [[Rcpp::export]]
-Eigen::MatrixXd covCalc(const Eigen::MatrixXd & X, const Eigen::MatrixXi & MAP, bool print)
+Eigen::MatrixXd covCalc(const Eigen::MatrixXd & X, const Eigen::MatrixXi & MAP)
 {
     int n = X.rows();
     int p = X.cols();
@@ -355,59 +366,6 @@ void find_all(const Eigen::VectorXi & vec, const int & val, std::vector<int> & o
     }
 }
 
-//vestigial, TODO: still used in algo 1 - gotta fix that
-int make_MAP(const std::vector<Eigen::MatrixXd>& Z, 
-             Eigen::MatrixXd & masterZ,
-             Eigen::MatrixXi & MAP, Eigen::VectorXd & r0,
-             int n, int k, int t)
-{
-    std::deque<double> all_times; //= Z(Eigen::all,Eigen::seqN(1,2*k,2)).reshaped();
-    int nkt = 0;
-    for(int i=0; i<n; ++i)
-    {
-        nkt += Z[i].rows();
-        int zcol = Z[i].cols();
-        for(int l=0; l<k; ++l)
-        {
-            Eigen::ArrayXi idxs = loc_a_in_b(1,Z[i](Eigen::all,2*l));
-            Eigen::VectorXd n_times = Z[i](idxs,2*l+1).reshaped();
-            for(int j=0;j<n_times.size();++j)
-            {
-                all_times.push_back(n_times(j));
-            }
-        }
-    }
-    r0 = Eigen::VectorXd::Zero(nkt);
-    std::set<double> time_set{all_times.begin(), all_times.end()};
-    std::vector<double> times(time_set.begin(), time_set.end());
-    MAP = Eigen::MatrixXi::Zero(n,k*t);
-    masterZ = Eigen::MatrixXd::Zero(k*t,2*k);
-    for(int i = 0; i < n; ++i)
-    {
-        for(int l=0; l<k; ++l)
-        {
-            //TODO: ENSURE CORRECTLY DISTINGUISHING BETWEEN TIME 0 and NO DATA 0
-            for(int j=0; j < t; ++j)
-            {
-                if(times[j] == 0)
-                {
-                    Eigen::ArrayXi idxs = loc_a_in_b(0,Z[i](Eigen::all,2*l + 1));
-                    MAP(i,l*t + j) = a_in_b(1,Z[i](idxs,2*l));
-                } else {
-                    MAP(i,l*t + j) = a_in_b(times[j],Z[i](Eigen::all,2*l + 1));
-                }
-            }
-        }
-    }
-    int CELL = 0;
-    for(int l=0; l<k; ++l)
-    {
-        masterZ(Eigen::seqN(l*t,t),CELL) = Eigen::VectorXd::Constant(t,1.0);
-        masterZ(Eigen::seqN(l*t,t),CELL+1) = Eigen::Map<Eigen::VectorXd>(times.data(), t);
-        CELL += 2;
-    }
-    return(nkt);
-}
 
 Eigen::MatrixXd Et_assemble(const Eigen::VectorXd & E, 
                             const Eigen::MatrixXi & MAP, 
@@ -497,16 +455,8 @@ void Et_Z_assemble_IP(const Eigen::Ref<const Eigen::VectorXd> & masterE,
                    const Eigen::Ref<const Eigen::MatrixXi> & MAP,
                    int i, int k, int t, int kt)
 {
-    // we can allow Z_out to be bigger than we need but not smaller
-    if(Zt_out.rows() < 2*k || Zt_out.cols() < kt)
-    {
-        Zt_out.resize(2*k,kt);
-    }
-    // we can allow Et_out to be bigger than we need but not smaller
-    if(Et_out.size() < kt)
-    {
-        Et_out.resize(kt);
-    }
+    Zt_out.resize(2*k,kt);
+    Et_out.resize(kt);
     int cnt = 0;
     int cnt2 = 0;
     for(int j = 0; j<k; ++j)
@@ -524,91 +474,139 @@ void Et_Z_assemble_IP(const Eigen::Ref<const Eigen::VectorXd> & masterE,
     }
 }
 
-void calc_ZDZ_plus_E_list(const std::vector<Eigen::MatrixXd>& Z,
+void calc_ZDZ_plus_E_list(const Eigen::MatrixXd & masterZt,
                           const Eigen::MatrixXd & D, const Eigen::VectorXd & E,
                           std::vector<Eigen::MatrixXd> & out, 
                           const Eigen::MatrixXi & MAP,
                           int n, int k, int t)
 {
+    Eigen::MatrixXi kt_vec = MAP.rowwise().sum();
+    Eigen::MatrixXd Zti(2*k,k*t), Vi(k*t,k*t);
+    Eigen::VectorXd Et(k*t);
     for(int i=0; i<n; ++i)
     {
-        int kt = Z[i].rows();
-        out[i] = (Z[i] * D * Z[i].transpose() + Et_assemble(E, MAP, i, k, t, kt));
+        int kt = kt_vec(i);
+        if(kt == 0) continue;
+        Z_assemble_IP(masterZt,Zti,MAP,i,k,t,kt);
+        Et_assemble_IP(E,Et,MAP,i,k,t,kt);
+        Vi = Zti.transpose() * D * Zti;
+        Vi.diagonal() += Et;
+        out[i] = Vi;
     }
 }
 
 // [[Rcpp::export]]
-Rcpp::List calc_ZDZ_plus_E_list(const std::vector<Eigen::MatrixXd>& Z,
+Rcpp::List calc_ZDZ_plus_E_list(const Eigen::MatrixXd & masterZt,
                           const Eigen::MatrixXd & D, const Eigen::VectorXd & E,
+                          const Eigen::MatrixXi & MAP,
                           int n, int k, int t)
 {
-    Eigen::MatrixXi MAP = Eigen::MatrixXi::Zero(n,k*t);
+    Eigen::VectorXd r0;
+    std::vector<Eigen::MatrixXd> out(n);
+    calc_ZDZ_plus_E_list(masterZt,D,E,out,MAP,n,k,t);
+    return(Rcpp::wrap(out));
+}
+
+void calc_ZDZ_plus_E(const Eigen::MatrixXd & masterZt,
+                    const Eigen::MatrixXd & D, 
+                    const Eigen::VectorXd & E,
+                    Eigen::MatrixXd & out, 
+                    const Eigen::MatrixXi & MAP,
+                    int n, int k, int t, int nkt)
+{
+    out.resize(nkt,nkt);
+    Eigen::VectorXi kt_vec = MAP.rowwise().sum();
+    Eigen::MatrixXd Zti(k*t,2*k), Vi(k*t,k*t);
+    Eigen::VectorXd Et(k*t);
+    int cnt=0;
+    for(int i=0; i<n; ++i)
+    {
+        int kt = kt_vec(i);
+        if(kt == 0) continue;
+        Z_assemble_IP(masterZt,Zti,MAP,i,k,t,kt);
+        Et_assemble_IP(E,Et,MAP,i,k,t,kt);
+        Vi = Zti.transpose() * D * Zti;
+        Vi.diagonal() += Et;
+        out.block(cnt,cnt,kt,kt) =Vi;
+        cnt += kt;
+    }
+}
+
+// [[Rcpp::export]]
+Rcpp::List calc_ZDZ_plus_E(const Eigen::MatrixXd & masterZt,
+                          const Eigen::MatrixXd & D,
+                          const Eigen::VectorXd & E,
+                          const Eigen::MatrixXi & MAP,
+                          int n, int k, int t, int nkt)
+{
     Eigen::VectorXd r0;
     Eigen::MatrixXd masterZ;
-    make_MAP(Z,masterZ,MAP,r0,n,k,t);
-    std::vector<Eigen::MatrixXd> out(n);
-    calc_ZDZ_plus_E_list(Z,D,E,out,MAP,n,k,t);
+    Eigen::MatrixXd out(nkt,nkt);
+    calc_ZDZ_plus_E(masterZt,D,E,out,MAP,n,k,t,nkt);
     return(Rcpp::wrap(out));
 }
 
 
-
 void estimate_beta(const Eigen::MatrixXd & X, const Eigen::VectorXd & y, 
                    const Eigen::VectorXi kt_vec, const Eigen::MatrixXi & MAP,
-                   const std::vector<Eigen::MatrixXd> & V, Eigen::VectorXd & beta,
-                   int n, int k, int t)
+                   const Eigen::MatrixXd & masterV, Eigen::VectorXd & beta,
+                   int n, int k, int t, bool verbose, double eigen_threshold)
 {
     int q = X.cols();
     Eigen::MatrixXd XVX = Eigen::MatrixXd::Zero(q,q);
+    Eigen::VectorXd XVy = Eigen::VectorXd::Zero(q);
+    Eigen::MatrixXd Vi(k*t,k*t), Xi;
+    Eigen::VectorXd yi;
+
     int cnt = 0;
-    std::vector<bool> v_inv(n);
-    std::vector<Eigen::MatrixXd> V_inv(n);
-    for(int i=0;i<n;++i)
+    for(int i=0; i<n; ++i)
     {
         int kt = kt_vec(i);
-        Eigen::FullPivLU<Eigen::MatrixXd> lu(V[i]);
-        v_inv[i] = lu.isInvertible();
-        if(v_inv[i])
+        if(kt == 0) continue;
+        V_assemble_IP(masterV,Vi,MAP,i,k,t,kt);
+
+        // Map the current subject's X and y
+        Xi = X.block(cnt, 0, kt, q);
+        yi = y.segment(cnt, kt);
+
+        Eigen::LLT<Eigen::MatrixXd> llt_Vi(Vi);
+        if(llt_Vi.info() == Eigen::Success)
         {
-            XVX += X(Eigen::seqN(cnt,kt),Eigen::all).transpose() * V[i].colPivHouseholderQr().solve(X(Eigen::seqN(cnt,kt),Eigen::all));
+            XVX += Xi.transpose() * llt_Vi.solve(Xi);
+            XVy += Xi.transpose() * llt_Vi.solve(yi);
         }
-        else
-        {
-            //Rcpp::Rcout << "Singular matrix - using pseudoinv" << "\n";
-            //Rcpp::Rcout << "idx = " << idx << " sjt= " << i << "\n";
-            //Rcpp::Rcout << "n0 = " << n << "; k0= " << k << "; t0=" << t << "\n";
-            V_inv[i] = V[i].completeOrthogonalDecomposition().pseudoInverse();
-            XVX += X(Eigen::seqN(cnt,kt),Eigen::all).transpose() * V_inv[i] * X(Eigen::seqN(cnt,kt),Eigen::all);
+        else{ // fallback if Vi not invertible
+            Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cod_Vi;
+            cod_Vi.setThreshold(eigen_threshold);
+            
+            cod_Vi.compute(Vi);
+            //Eigen::MatrixXd Vi_inv = cod_Vi.pseudoInverse();
+            // Reconstruct the safely inverted matrix
+            //Eigen::MatrixXd Vi_inv = evecs * evals.asDiagonal() * evecs.transpose();
+
+            XVX += Xi.transpose() * cod_Vi.solve(Xi);//Vi_inv * Xi;
+            XVy += Xi.transpose() * cod_Vi.solve(yi);//Vi_inv * yi;
         }
         cnt += kt;
     }
-    Eigen::MatrixXd XVXinvXt;
-    Eigen::FullPivLU<Eigen::MatrixXd> lu(XVX);
-    bool v_inv2 = lu.isInvertible();
-    if(v_inv2)
+    Eigen::LDLT<Eigen::MatrixXd> ldlt_XVX(XVX);
+    if(ldlt_XVX.info() == Eigen::Success)
     {
-        XVXinvXt = XVX.colPivHouseholderQr().solve(X.transpose());
+        beta = ldlt_XVX.solve(XVy);
     }
     else
     {
-        //Rcpp::Rcout << "Singular matrix - using pseudoinv" << "\n";
-        XVXinvXt = XVX.completeOrthogonalDecomposition().pseudoInverse() * X.transpose();
+        if(verbose) {
+            Rcpp::Rcout << "Warning: XVX matrix is not positive definite. Using pseudo-inverse fallback for beta estimation.\n";
+        }
+        beta = XVX.completeOrthogonalDecomposition().pseudoInverse() * XVy;
     }
-    beta = Eigen::VectorXd::Zero(q);
-    cnt = 0;
-    for(int i=0;i<n;++i)
+    if(verbose)
     {
-        int kt = kt_vec(i);
-        if(v_inv[i])
-        {
-            beta += XVXinvXt(Eigen::all,Eigen::seqN(cnt,kt)) * V[i].colPivHouseholderQr().solve(y(Eigen::seqN(cnt,kt)));
-        }
-        else
-        {
-            beta += XVXinvXt(Eigen::all,Eigen::seqN(cnt,kt)) * V_inv[i] * y(Eigen::seqN(cnt,kt));
-        }
-        cnt += kt;
+        Rcpp::Rcout << "XVX" << printdims(XVX) << std::endl;
+        Rcpp::Rcout << XVX.block(0,0,5,5) << std::endl;
     }
+
 }
 
 void estimate_beta2(const Eigen::Ref<const Eigen::MatrixXd> & X, 
@@ -781,6 +779,18 @@ Eigen::MatrixXd RtR(const Eigen::MatrixXd & R, const Eigen::MatrixXi & MAP)
         }
     }
     return cov;
+}
+
+// Helper to calculate the upper/lower bounds safely
+void get_bounds(const Eigen::MatrixXd& cov, const Eigen::ArrayXXd& theta, double& lower, double& upper) 
+{
+    Eigen::ArrayXXd safe_theta = (theta == 0.0).select(1e-8, theta);
+    Eigen::MatrixXd delta = (cov.array() / safe_theta).cwiseAbs().matrix();
+    delta.diagonal() = Eigen::VectorXd::Zero(delta.rows());
+    
+    upper = delta.maxCoeff();
+    lower = (delta.array() <= 0.0).select(std::numeric_limits<double>::max(), delta).minCoeff();
+    if (lower == std::numeric_limits<double>::max()) lower = 0.0;
 }
 
 // [[Rcpp::export]]

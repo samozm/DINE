@@ -2,7 +2,7 @@
 % Please edit documentation in R/estimate.R
 \name{estimate}
 \alias{estimate}
-\title{Run DINE algorithm 1 or 2}
+\title{Run DCENt algorithm 1 or 2}
 \usage{
 estimate(
   X,
@@ -75,5 +75,5 @@ A named list containing:
 }
 }
 \description{
-Run DINE algorithm 1 or 2
+Run DCENt algorithm 1 or 2
 }

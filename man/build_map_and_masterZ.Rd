@@ -2,7 +2,7 @@
 % Please edit documentation in R/estimate.R
 \name{build_map_and_masterZ}
 \alias{build_map_and_masterZ}
-\title{Build MAP and masterZ matrices for DINE}
+\title{Build MAP and masterZ matrices for DCENt}
 \usage{
 build_map_and_masterZ(Z_in)
 }
@@ -13,5 +13,5 @@ build_map_and_masterZ(Z_in)
 A list containing the masterZ matrix and the MAP matrix, k (number of nodes) and t (number of timepoints).
 }
 \description{
-Build MAP and masterZ matrices for DINE
+Build MAP and masterZ matrices for DCENt
 }

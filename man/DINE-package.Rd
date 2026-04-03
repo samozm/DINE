@@ -1,24 +1,24 @@
-\name{DINE-package}
-\alias{DINE-package}
-\alias{DINE}
+\name{DCENt-package}
+\alias{DCENt-package}
+\alias{DCENt}
 \docType{package}
 \title{
-\packageTitle{DINE}
+\packageTitle{DCENt}
 }
 \description{
-\packageDescription{DINE}
+\packageDescription{DCENt}
 }
 \details{
 
 The DESCRIPTION file:
-\packageDESCRIPTION{DINE}
-\packageIndices{DINE}
+\packageDESCRIPTION{DCENt}
+\packageIndices{DCENt}
 ~~ An overview of how to use the package, including the most important functions ~~
 }
 \author{
-\packageAuthor{DINE}
+\packageAuthor{DCENt}
 
-Maintainer: \packageMaintainer{DINE}
+Maintainer: \packageMaintainer{DCENt}
 }
 \references{
 ~~ Literature or other references for background information ~~
