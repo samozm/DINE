@@ -27,6 +27,29 @@ void estimate_V(const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
     }
     masterV = covCalc(Rt.transpose(),MAP);
 
+    //Project to Positive Definite Space (Eigenvalue Clipping)
+    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> es(masterV);
+    Eigen::VectorXd evals = es.eigenvalues();
+    Eigen::MatrixXd evecs = es.eigenvectors();
+
+    bool needs_projection = false;
+    double min_variance = 1e-5; // The smallest variance we will allow
+
+    for(int j = 0; j < evals.size(); ++j) 
+    {
+        // If the variance is negative or zero, clip it to the minimum
+        if(evals(j) < min_variance) 
+        {
+            evals(j) = min_variance; 
+            needs_projection = true;
+        }
+    }
+
+    // Reconstruct the matrix only if we had to fix it
+    if(needs_projection) 
+    {
+        masterV = evecs * evals.asDiagonal() * evecs.transpose();
+    }
 }
 
 void estimate_D(const Eigen::VectorXd & r0, 
@@ -336,6 +359,29 @@ int initial_estimates(const Eigen::MatrixXd & X,
     }
 
     masterV = covCalc(Rt.transpose(),MAP);
+    //Project to Positive Definite Space (Eigenvalue Clipping)
+    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> es(masterV);
+    Eigen::VectorXd evals = es.eigenvalues();
+    Eigen::MatrixXd evecs = es.eigenvectors();
+
+    bool needs_projection = false;
+    double min_variance = 1e-5; // The smallest variance we will allow
+
+    for(int j = 0; j < evals.size(); ++j) 
+    {
+        // If the variance is negative or zero, clip it to the minimum
+        if(evals(j) < min_variance) 
+        {
+            evals(j) = min_variance; 
+            needs_projection = true;
+        }
+    }
+
+    // Reconstruct the matrix only if we had to fix it
+    if(needs_projection) 
+    {
+        masterV = evecs * evals.asDiagonal() * evecs.transpose();
+    }
     return current;
     
 }
@@ -448,7 +494,8 @@ int estimate_betaV(const Eigen::MatrixXd & X,
             Rcpp::Rcout << "estimate_V:     " << time_V << " ms" << std::endl;
         }
         prev_err = err;
-        err = ((beta - beta_prev).squaredNorm() / beta_prev.squaredNorm() + ((masterV - masterV_prev).squaredNorm()) / masterV_prev.squaredNorm())/2;
+        double eps = 1e-8;
+        err = ((beta - beta_prev).squaredNorm() / (beta_prev.squaredNorm() + eps) + (masterV - masterV_prev).squaredNorm() / (masterV_prev.squaredNorm() + eps))/2;
         all_err[n_itr] = err;
         if(verbose)
         {
